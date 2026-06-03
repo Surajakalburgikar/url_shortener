@@ -32,6 +32,17 @@ export const AuthProvider = ({ children }) => {
     checkAuth();
   }, []);
 
+  const parseError = (error, defaultMsg) => {
+    const detail = error.response?.data?.detail;
+    if (Array.isArray(detail)) {
+      return detail.map(d => d.msg).join(', ');
+    }
+    if (typeof detail === 'object' && detail !== null) {
+      return JSON.stringify(detail);
+    }
+    return detail || defaultMsg;
+  };
+
   const login = async (email, password) => {
     setLoading(true);
     try {
@@ -46,7 +57,7 @@ export const AuthProvider = ({ children }) => {
       setUser(profileResponse.data);
       return profileResponse.data;
     } catch (error) {
-      throw error.response?.data?.detail || 'Login failed';
+      throw parseError(error, 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -66,7 +77,7 @@ export const AuthProvider = ({ children }) => {
       setUser(profileResponse.data);
       return profileResponse.data;
     } catch (error) {
-      throw error.response?.data?.detail || 'Registration failed';
+      throw parseError(error, 'Registration failed');
     } finally {
       setLoading(false);
     }
@@ -78,11 +89,12 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
-  const loginWithOAuth = (accessToken, refreshToken) => {
+  const loginWithOAuth = async (accessToken, refreshToken) => {
+    setLoading(true);
     localStorage.setItem('access_token', accessToken);
     localStorage.setItem('refresh_token', refreshToken);
     // Reload auth state
-    checkAuth();
+    await checkAuth();
   };
 
   return (

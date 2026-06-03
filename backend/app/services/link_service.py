@@ -122,7 +122,7 @@ class LinkService:
         )
 
         # Cache in Redis so the first redirect is also fast
-        await self._cache_link(short_code, url_str, data.expires_at)
+        await self._cache_link(short_code, url_str, data.expires_at, link.id)
 
         return LinkResponse(
             id=link.id,
@@ -151,12 +151,16 @@ class LinkService:
 
         # 1. Check Redis cache
         if self.redis:
-            cached = await self.redis.get(f"link:{short_code}")
-            if cached:
-                log.info("redirect.cache_hit", short_code=short_code)
-                # Format: "url|link_id"
-                parts = cached.decode().split("|", 1)
-                return parts[0], uuid.UUID(parts[1])
+            try:
+                cached = await self.redis.get(f"link:{short_code}")
+                if cached:
+                    log.info("redirect.cache_hit", short_code=short_code)
+                    # Format: "url|link_id"
+                    parts = cached.decode().split("|", 1)
+                    if len(parts) == 2:
+                        return parts[0], uuid.UUID(parts[1])
+            except Exception as e:
+                log.warning("redirect.redis_error", error=str(e))
 
         # 2. Cache miss — go to DB
         log.info("redirect.cache_miss", short_code=short_code)
@@ -180,7 +184,7 @@ class LinkService:
                 )
 
         # 3. Cache it for next time
-        await self._cache_link(short_code, link.original_url, link.expires_at)
+        await self._cache_link(short_code, link.original_url, link.expires_at, link.id)
 
         return link.original_url, link.id
 
@@ -240,26 +244,37 @@ class LinkService:
 
         # Evict from cache
         if self.redis:
-            await self.redis.delete(f"link:{short_code}")
+            try:
+                await self.redis.delete(f"link:{short_code}")
+            except Exception as e:
+                import structlog
+                log = structlog.get_logger()
+                log.warning("delete.redis_error", error=str(e))
 
     async def _cache_link(
         self,
         short_code: str,
         url: str,
         expires_at: datetime | None,
+        link_id: uuid.UUID,
     ) -> None:
         """Store link in Redis. TTL matches the link's expiry if set."""
         if not self.redis:
             return
 
-        value = f"{url}|"  # link_id will be added when we have it
-        # TTL: if link expires, cache should too; otherwise cache for 1 hour
-        if expires_at:
-            expires = expires_at
-            if expires.tzinfo is None:
-                expires = expires.replace(tzinfo=timezone.utc)
-            ttl = int((expires - datetime.now(timezone.utc)).total_seconds())
-            if ttl > 0:
-                await self.redis.setex(f"link:{short_code}", ttl, url)
-        else:
-            await self.redis.setex(f"link:{short_code}", 3600, url)  # 1 hour default TTL
+        value = f"{url}|{str(link_id)}"
+        try:
+            # TTL: if link expires, cache should too; otherwise cache for 1 hour
+            if expires_at:
+                expires = expires_at
+                if expires.tzinfo is None:
+                    expires = expires.replace(tzinfo=timezone.utc)
+                ttl = int((expires - datetime.now(timezone.utc)).total_seconds())
+                if ttl > 0:
+                    await self.redis.setex(f"link:{short_code}", ttl, value)
+            else:
+                await self.redis.setex(f"link:{short_code}", 3600, value)  # 1 hour default TTL
+        except Exception as e:
+            import structlog
+            log = structlog.get_logger()
+            log.warning("cache.redis_error", error=str(e))

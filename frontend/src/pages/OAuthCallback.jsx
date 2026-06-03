@@ -8,17 +8,20 @@ const OAuthCallback = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const accessToken = searchParams.get('access_token');
-    const refreshToken = searchParams.get('refresh_token');
+    const handleAuth = async () => {
+      const accessToken = searchParams.get('access_token');
+      const refreshToken = searchParams.get('refresh_token');
 
-    if (accessToken && refreshToken) {
-      // Save tokens and load auth profile
-      loginWithOAuth(accessToken, refreshToken);
-      navigate('/dashboard', { replace: true });
-    } else {
-      // If tokens are missing, redirect to login
-      navigate('/login', { replace: true });
-    }
+      if (accessToken && refreshToken) {
+        // Save tokens and load auth profile
+        await loginWithOAuth(accessToken, refreshToken);
+        navigate('/dashboard', { replace: true });
+      } else {
+        // If tokens are missing, redirect to login
+        navigate('/login', { replace: true });
+      }
+    };
+    handleAuth();
   }, [searchParams, loginWithOAuth, navigate]);
 
   return (

@@ -113,25 +113,33 @@ async def _check_rate_limit(request: Request, user: User | None) -> None:
     if not redis_client:
         return  # Skip rate limiting if Redis is not available (dev without Redis)
 
-    # Build the rate limit key
-    if user:
-        key = f"ratelimit:links:user:{user.id}"
-        limit = 50
-    else:
-        # Use client IP for anonymous rate limiting
-        client_ip = request.client.host if request.client else "unknown"
-        key = f"ratelimit:links:anon:{client_ip}"
-        limit = 5
+    try:
+        # Build the rate limit key
+        if user:
+            key = f"ratelimit:links:user:{user.id}"
+            limit = 50
+        else:
+            # Use client IP for anonymous rate limiting
+            client_ip = request.client.host if request.client else "unknown"
+            key = f"ratelimit:links:anon:{client_ip}"
+            limit = 5
 
-    # Increment counter and set 1-hour TTL if this is the first request
-    count = await redis_client.incr(key)
-    if count == 1:
-        await redis_client.expire(key, 3600)  # 1 hour window
+        # Increment counter and set 1-hour TTL if this is the first request
+        count = await redis_client.incr(key)
+        if count == 1:
+            await redis_client.expire(key, 3600)  # 1 hour window
 
-    if count > limit:
-        from fastapi import HTTPException
-        raise HTTPException(
-            status_code=429,
-            detail=f"Rate limit exceeded. {'Authenticated' if user else 'Anonymous'} users can create {limit} links per hour.",
-            headers={"Retry-After": "3600"},
-        )
+        if count > limit:
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limit exceeded. {'Authenticated' if user else 'Anonymous'} users can create {limit} links per hour.",
+                headers={"Retry-After": "3600"},
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        import structlog
+        log = structlog.get_logger()
+        log.warning("ratelimit.redis_error", error=str(e))
+        return  # Fail open

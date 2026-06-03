@@ -132,6 +132,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Starlette Session Middleware — required by Authlib to maintain state between OAuth redirects
+from starlette.middleware.sessions import SessionMiddleware
+app.add_middleware(SessionMiddleware, secret_key=settings.secret_key)
+
 
 # ── Global exception handler ──────────────────────────────────────────────────
 

@@ -224,9 +224,20 @@ const Dashboard = () => {
                       onClick={() => setSelectedLink(link)}
                     >
                       <div className="link-details">
-                        <div className="link-short-url" style={{ color: isSelected ? 'var(--primary)' : 'var(--text-primary)' }}>
+                        <a
+                          href={`${apiBaseUrl}/${link.short_code}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="link-short-url"
+                          style={{
+                            color: isSelected ? 'var(--primary)' : 'var(--text-primary)',
+                            textDecoration: 'none',
+                            fontWeight: '600'
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           /{link.short_code}
-                        </div>
+                        </a>
                         <div className="link-orig-url">{link.original_url}</div>
                         <div className="link-meta">
                           <span>Created {new Date(link.created_at).toLocaleDateString()}</span>
