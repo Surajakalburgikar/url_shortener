@@ -3,52 +3,51 @@ app/middleware/correlation_id.py
 ─────────────────────────────────
 Generates a unique X-Request-ID for every request.
 
-Why correlation IDs?
-When you have logs from thousands of requests, you need a way to find ALL log lines
-from ONE specific request. Without correlation IDs, debugging production issues is
-like finding a needle in a haystack.
-
-With correlation IDs:
-- Every request gets a UUID (e.g. "550e8400-e29b-41d4-a716-446655440000")
-- Every log line from that request includes that UUID
-- You can grep logs for "550e8400..." and see the full story of that request
-- The UUID is also returned in the response header so the client can report it in bug reports
-
-This is standard observability practice at Google, AWS, Stripe, etc.
+Uses pure ASGI middleware pattern to avoid Starlette's BaseHTTPMiddleware event loop bugs.
 """
 
 import uuid
-
 import structlog
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import Response
+from starlette.datastructures import MutableHeaders
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 REQUEST_ID_HEADER = "X-Request-ID"
 
 
-class CorrelationIdMiddleware(BaseHTTPMiddleware):
-    """Attaches a unique request ID to every request and response."""
+class CorrelationIdMiddleware:
+    """Attaches a unique request ID to every request and response using pure ASGI."""
 
-    async def dispatch(self, request: Request, call_next) -> Response:
-        # Use existing ID if provided by a upstream proxy (e.g. AWS ALB, Nginx)
-        # Otherwise generate a new one
-        request_id = request.headers.get(REQUEST_ID_HEADER) or str(uuid.uuid4())
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
 
-        # Bind request_id to structlog context — all log lines in this request
-        # will automatically include request_id=<uuid>
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] not in ("http", "websocket"):
+            await self.app(scope, receive, send)
+            return
+
+        # Try to read incoming request ID or generate a new one
+        request_id = str(uuid.uuid4())
+        for key, value in scope.get("headers", []):
+            if key.lower() == REQUEST_ID_HEADER.lower().encode("latin-1"):
+                request_id = value.decode("latin-1")
+                break
+
+        # Bind to structlog logging context
         structlog.contextvars.bind_contextvars(request_id=request_id)
 
-        # Store on request state so routers can access it
-        request.state.request_id = request_id
+        # Store in scope state so endpoints/dependency-injection can access it via request.state
+        if "state" not in scope:
+            scope["state"] = {}
+        scope["state"]["request_id"] = request_id
 
-        response = await call_next(request)
+        async def send_wrapper(message) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                headers[REQUEST_ID_HEADER] = request_id
+            await send(message)
 
-        # Return the request ID in the response header
-        # Client can include this in bug reports: "My request ID was 550e8400..."
-        response.headers[REQUEST_ID_HEADER] = request_id
-
-        # Clear the context so it doesn't bleed into the next request
-        structlog.contextvars.clear_contextvars()
-
-        return response
+        try:
+            await self.app(scope, receive, send_wrapper)
+        finally:
+            # Clear context at request end
+            structlog.contextvars.clear_contextvars()

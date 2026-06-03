@@ -3,47 +3,36 @@ app/middleware/security_headers.py
 ────────────────────────────────────
 Adds security-related HTTP headers to every response.
 
-Why security headers matter:
-These headers tell the browser how to behave when displaying your content.
-Without them, your app is vulnerable to:
-- Clickjacking (X-Frame-Options)
-- MIME type sniffing attacks (X-Content-Type-Options)
-- Cross-site scripting via old IE (X-XSS-Protection)
-- Protocol downgrade attacks (Strict-Transport-Security)
-
-A security scanner (like Mozilla Observatory) will give you an F without these.
-With them, you get an A+. Big tech companies always set these.
+Uses the pure ASGI middleware pattern instead of BaseHTTPMiddleware.
+Why?
+- BaseHTTPMiddleware has known performance overhead and event loop bugs in async tests.
+- Pure ASGI middleware is faster, lightweight, and works perfectly in async test suites.
 """
 
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import Response
+from starlette.datastructures import MutableHeaders
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    """Adds security headers to every HTTP response."""
+class SecurityHeadersMiddleware:
+    """Adds security headers to every HTTP response using pure ASGI wrapper."""
 
-    async def dispatch(self, request: Request, call_next) -> Response:
-        response = await call_next(request)
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
 
-        # Prevents browsers from guessing the content type
-        # (protects against MIME confusion attacks)
-        response.headers["X-Content-Type-Options"] = "nosniff"
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        # Only modify HTTP or WebSocket responses
+        if scope["type"] not in ("http", "websocket"):
+            await self.app(scope, receive, send)
+            return
 
-        # Prevents your app from being embedded in an iframe (clickjacking protection)
-        response.headers["X-Frame-Options"] = "DENY"
+        async def send_wrapper(message) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                headers["X-Content-Type-Options"] = "nosniff"
+                headers["X-Frame-Options"] = "DENY"
+                headers["X-XSS-Protection"] = "1; mode=block"
+                headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+                headers["Server"] = "url-shortener"
+            await send(message)
 
-        # Legacy XSS protection for old browsers (modern browsers use CSP instead)
-        response.headers["X-XSS-Protection"] = "1; mode=block"
-
-        # Forces HTTPS for 1 year — only set in production (doesn't make sense on localhost)
-        # includeSubDomains: applies to all subdomains too
-        response.headers["Strict-Transport-Security"] = (
-            "max-age=31536000; includeSubDomains"
-        )
-
-        # Hides the server technology stack from attackers
-        # (they don't need to know we're running FastAPI/uvicorn)
-        response.headers["Server"] = "url-shortener"
-
-        return response
+        await self.app(scope, receive, send_wrapper)
