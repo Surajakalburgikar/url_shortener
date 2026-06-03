@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Environment variables — NEVER commit these
+.env
+.env.local
+.env.production
+
+# Coverage & test artifacts
+.coverage
+htmlcov/
+.pytest_cache/
+*.xml
+
+# Alembic (keep versions, ignore pycache inside)
+backend/alembic/versions/__pycache__/
+
+# Load test reports (large HTML files)
+backend/load-tests/reports/
+
+# Node / Frontend
+node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+
+# VS Code
+.vscode/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
