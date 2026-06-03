@@ -1,0 +1,23 @@
+# Ignore local virtual environment
+venv/
+.venv/
+env/
+
+# Ignore Python cache
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore testing caches
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Ignore version control
+.git/
+.gitignore
+
+# Ignore local config files
+.env
+*.db
