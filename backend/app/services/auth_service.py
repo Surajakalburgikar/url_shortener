@@ -221,7 +221,7 @@ class AuthService:
         if user:
             # Link GitHub to existing email account
             user.github_id = github_id
-            await self.db.flush()
+            await self.db.commit()
             return create_token_pair(user.id)
 
         # Brand new user via GitHub
