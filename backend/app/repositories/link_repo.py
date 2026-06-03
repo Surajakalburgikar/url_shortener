@@ -93,14 +93,14 @@ class LinkRepository:
             expires_at=expires_at,
         )
         self.db.add(link)
-        await self.db.flush()
+        await self.db.commit()
         await self.db.refresh(link)
         return link
 
     async def delete(self, link: Link) -> None:
         """Delete a link (and cascade-deletes all its clicks via DB constraint)."""
         await self.db.delete(link)
-        await self.db.flush()
+        await self.db.commit()
 
     async def get_click_count(self, link_id: uuid.UUID) -> int:
         """Get total click count for a single link."""

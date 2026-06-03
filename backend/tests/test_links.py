@@ -88,3 +88,28 @@ async def test_delete_link_unauthorized(client: AsyncClient) -> None:
 
     response = await client.delete(f"/api/v1/links/{short_code}", headers=headers_b)
     assert response.status_code == 403
+
+
+async def test_delete_link_success(client: AsyncClient, db_session: AsyncSession) -> None:
+    """Test that a user can successfully delete their own link."""
+    reg_payload = {"email": "owner@example.com", "password": "password123"}
+    res = await client.post("/api/v1/auth/register", json=reg_payload)
+    token = res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Create link
+    payload = {"original_url": "https://www.wikipedia.org", "custom_alias": "wiki-link"}
+    create_res = await client.post("/api/v1/links", json=payload, headers=headers)
+    assert create_res.status_code == 201
+    short_code = create_res.json()["short_code"]
+
+    # Delete link
+    delete_res = await client.delete(f"/api/v1/links/{short_code}", headers=headers)
+    assert delete_res.status_code == 204
+
+    # Verify link is gone from DB
+    result = await db_session.execute(
+        select(Link).where(Link.short_code == short_code)
+    )
+    link = result.scalar_one_or_none()
+    assert link is None

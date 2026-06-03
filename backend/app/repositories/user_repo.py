@@ -67,9 +67,8 @@ class UserRepository:
             github_id=github_id,
         )
         self.db.add(user)
-        await self.db.flush()   # Flush to DB (gets the generated UUID) but don't commit yet.
-                                # The router's get_db() dependency commits after the endpoint returns.
-        await self.db.refresh(user)  # Reload from DB to get server-generated defaults
+        await self.db.commit()
+        await self.db.refresh(user)
         return user
 
     async def email_exists(self, email: str) -> bool:
