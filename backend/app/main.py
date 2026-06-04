@@ -164,11 +164,13 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
         exc_info=exc,
     )
 
+    import traceback
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "error": "internal_server_error",
-            "message": "An unexpected error occurred. Please try again.",
+            "message": str(exc),
+            "traceback": "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
             "request_id": request_id,
         },
     )
