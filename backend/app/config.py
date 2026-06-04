@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     test_database_url: str = ""
 
     # ── Redis ─────────────────────────────────────────────────────────────────
-    redis_url: str = Field(...)
+    redis_url: str = ""
 
     # ── GitHub OAuth ──────────────────────────────────────────────────────────
     github_client_id: str = ""

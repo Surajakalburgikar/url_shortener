@@ -32,3 +32,9 @@ class TokenPayload(BaseModel):
     """
     sub: str
     type: str  # "access" or "refresh" — prevents using a refresh token as an access token
+
+
+class RefreshTokenRequest(BaseModel):
+    """Request body for POST /api/v1/auth/refresh"""
+    refresh_token: str
+

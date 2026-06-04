@@ -24,7 +24,7 @@ from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
-from app.schemas.token import AccessToken, Token
+from app.schemas.token import AccessToken, RefreshTokenRequest, Token
 from app.schemas.user import UserCreate, UserLogin, UserResponse
 from app.services.auth_service import AuthService
 
@@ -61,19 +61,12 @@ async def login(data: UserLogin, db: AsyncSession = Depends(get_db)) -> Token:
     description="Exchange a valid refresh token for a new access token. Refresh token itself is not rotated.",
 )
 async def refresh_token(
-    token_data: dict,
+    data: RefreshTokenRequest,
     db: AsyncSession = Depends(get_db),
 ) -> AccessToken:
-    """
-    Body: {"refresh_token": "eyJ..."}
-    """
-    from fastapi import HTTPException
-    refresh_token_str = token_data.get("refresh_token", "")
-    if not refresh_token_str:
-        raise HTTPException(status_code=400, detail="refresh_token field is required")
-
+    """Body: {"refresh_token": "eyJ..."}"""
     service = AuthService(db)
-    new_access_token = await service.refresh_access_token(refresh_token_str)
+    new_access_token = await service.refresh_access_token(data.refresh_token)
     return AccessToken(access_token=new_access_token)
 
 

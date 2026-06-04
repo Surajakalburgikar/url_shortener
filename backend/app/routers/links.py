@@ -109,6 +109,7 @@ async def _check_rate_limit(request: Request, user: User | None) -> None:
     The decorator approach can't differentiate limits by auth status.
     This gives us full control: 5/hr for anon, 50/hr for authenticated.
     """
+    from fastapi import HTTPException
     from app.main import redis_client
     if not redis_client:
         return  # Skip rate limiting if Redis is not available (dev without Redis)
@@ -130,7 +131,6 @@ async def _check_rate_limit(request: Request, user: User | None) -> None:
             await redis_client.expire(key, 3600)  # 1 hour window
 
         if count > limit:
-            from fastapi import HTTPException
             raise HTTPException(
                 status_code=429,
                 detail=f"Rate limit exceeded. {'Authenticated' if user else 'Anonymous'} users can create {limit} links per hour.",
@@ -143,3 +143,4 @@ async def _check_rate_limit(request: Request, user: User | None) -> None:
         log = structlog.get_logger()
         log.warning("ratelimit.redis_error", error=str(e))
         return  # Fail open
+

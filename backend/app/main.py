@@ -92,6 +92,9 @@ app = FastAPI(
 async def startup():
     """Connect to Redis on startup."""
     global redis_client
+    if not settings.redis_url:
+        log.info("startup.redis_skipped", reason="REDIS_URL not configured")
+        return
     try:
         import redis.asyncio as aioredis
         redis_client = aioredis.from_url(
