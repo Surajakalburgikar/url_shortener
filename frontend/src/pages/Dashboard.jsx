@@ -17,7 +17,8 @@ const Dashboard = () => {
   // Create Link form inside dashboard
   const [originalUrl, setOriginalUrl] = useState('');
   const [customAlias, setCustomAlias] = useState('');
-  const [expiresAt, setExpiresAt] = useState('');
+  const [expiryDate, setExpiryDate] = useState('');
+  const [expiryTime, setExpiryTime] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
   const [createSuccess, setCreateSuccess] = useState('');
@@ -83,10 +84,70 @@ const Dashboard = () => {
     setCreateSuccess('');
 
     try {
+      let parsedExpiry = null;
+      if (expiryDate.trim()) {
+        const cleanedDate = expiryDate.trim();
+        let date = null;
+
+        // Try YYYY-MM-DD
+        const yyyymmdd = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(cleanedDate);
+        if (yyyymmdd) {
+          const year = parseInt(yyyymmdd[1], 10);
+          const month = parseInt(yyyymmdd[2], 10) - 1;
+          const day = parseInt(yyyymmdd[3], 10);
+          date = new Date(year, month, day);
+        } else {
+          // Try DD-MM-YYYY or DD/MM/YYYY
+          const ddmmyyyy = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/.exec(cleanedDate);
+          if (ddmmyyyy) {
+            const day = parseInt(ddmmyyyy[1], 10);
+            const month = parseInt(ddmmyyyy[2], 10) - 1;
+            const year = parseInt(ddmmyyyy[3], 10);
+            date = new Date(year, month, day);
+          } else {
+            // Standard parse fallback
+            date = new Date(cleanedDate);
+          }
+        }
+
+        if (!date || isNaN(date.getTime())) {
+          setCreateError('Invalid date format. Please use YYYY-MM-DD or select using the calendar.');
+          setCreating(false);
+          return;
+        }
+
+        // Apply time if provided
+        if (expiryTime.trim()) {
+          const timeParts = /^(\d{1,2}):(\d{2})$/.exec(expiryTime.trim());
+          if (timeParts) {
+            const hours = parseInt(timeParts[1], 10);
+            const minutes = parseInt(timeParts[2], 10);
+            date.setHours(hours, minutes, 0, 0);
+          } else {
+            const timeVal = new Date(`1970-01-01T${expiryTime.trim()}`);
+            if (!isNaN(timeVal.getTime())) {
+              date.setHours(timeVal.getHours(), timeVal.getMinutes(), 0, 0);
+            }
+          }
+        } else {
+          // Time is optional — default to end of that day (23:59:59)
+          date.setHours(23, 59, 59, 999);
+        }
+
+        // Validate future date
+        if (date.getTime() <= Date.now()) {
+          setCreateError('Expiration date must be in the future.');
+          setCreating(false);
+          return;
+        }
+
+        parsedExpiry = date.toISOString();
+      }
+
       const payload = {
         original_url: originalUrl,
         ...(customAlias.trim() && { custom_alias: customAlias.trim() }),
-        ...(expiresAt && { expires_at: new Date(expiresAt).toISOString() }),
+        ...(parsedExpiry && { expires_at: parsedExpiry }),
       };
 
       const response = await api.post('/api/v1/links', payload);
@@ -95,7 +156,8 @@ const Dashboard = () => {
       // Reset form
       setOriginalUrl('');
       setCustomAlias('');
-      setExpiresAt('');
+      setExpiryDate('');
+      setExpiryTime('');
       
       // Refresh list
       fetchLinks();
@@ -171,14 +233,72 @@ const Dashboard = () => {
                   />
                 </div>
                 <div className="form-group">
-                  <label htmlFor="dash-expiry">Expiration Date (Optional)</label>
+                  <label htmlFor="dash-expiry-date">Expiration Date (Optional)</label>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input
+                      id="dash-expiry-date"
+                      type="text"
+                      placeholder="YYYY-MM-DD"
+                      value={expiryDate}
+                      onChange={(e) => setExpiryDate(e.target.value)}
+                      style={{ flex: 1 }}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ padding: '0 0.75rem', display: 'flex', alignItems: 'center' }}
+                      onClick={() => {
+                        try { document.getElementById('dash-date-picker').showPicker(); } catch (e) {}
+                      }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                      </svg>
+                    </button>
+                  </div>
                   <input
-                    id="dash-expiry"
-                    type="datetime-local"
-                    value={expiresAt}
-                    onChange={(e) => setExpiresAt(e.target.value)}
+                    id="dash-date-picker"
+                    type="date"
+                    style={{ position: 'absolute', width: 0, height: 0, opacity: 0, pointerEvents: 'none' }}
+                    onChange={(e) => { if (e.target.value) setExpiryDate(e.target.value); }}
                   />
                 </div>
+              </div>
+
+              <div className="form-group" style={{ marginTop: '0.5rem' }}>
+                <label htmlFor="dash-expiry-time">Expiration Time (Optional)</label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    id="dash-expiry-time"
+                    type="text"
+                    placeholder="HH:MM (e.g. 14:30)"
+                    value={expiryTime}
+                    onChange={(e) => setExpiryTime(e.target.value)}
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ padding: '0 0.75rem', display: 'flex', alignItems: 'center' }}
+                    onClick={() => {
+                      try { document.getElementById('dash-time-picker').showPicker(); } catch (e) {}
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                  </button>
+                </div>
+                <input
+                  id="dash-time-picker"
+                  type="time"
+                  style={{ position: 'absolute', width: 0, height: 0, opacity: 0, pointerEvents: 'none' }}
+                  onChange={(e) => { if (e.target.value) setExpiryTime(e.target.value); }}
+                />
               </div>
 
               <button type="submit" disabled={creating} className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem' }}>
