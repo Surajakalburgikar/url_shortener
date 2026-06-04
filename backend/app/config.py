@@ -43,6 +43,14 @@ class Settings(BaseSettings):
     database_url: str = Field(...)
     test_database_url: str = ""
 
+    @field_validator("database_url", mode="after")
+    @classmethod
+    def append_prepared_statement_cache_size(cls, v: str) -> str:
+        if v.startswith("postgresql+asyncpg://") and "prepared_statement_cache_size" not in v:
+            separator = "&" if "?" in v else "?"
+            return f"{v}{separator}prepared_statement_cache_size=0"
+        return v
+
     # ── Redis ─────────────────────────────────────────────────────────────────
     redis_url: str = ""
 
