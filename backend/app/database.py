@@ -38,7 +38,11 @@ engine = create_async_engine(
     max_overflow=10,
     pool_timeout=30,
     pool_recycle=1800,
+    connect_args={
+        "prepared_statement_cache_size": 0,
+    },
 )
+
 
 
 # ── Session factory ───────────────────────────────────────────────────────────
