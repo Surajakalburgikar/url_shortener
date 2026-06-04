@@ -23,7 +23,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
+from app.database import AsyncSessionLocal, get_db
 from app.repositories.click_repo import ClickRepository
 from app.services.link_service import LinkService
 
@@ -33,7 +33,7 @@ router = APIRouter(tags=["redirect"])
 async def record_click(
     link_id: uuid.UUID,
     request: Request,
-    db: AsyncSession,
+    db: AsyncSession | None = None,
 ) -> None:
     """
     Record a click event asynchronously.
@@ -64,8 +64,23 @@ async def record_click(
     # In a real system, you'd use a MaxMind GeoIP database here
     country = None  # We'll leave this as None for now — can be enhanced later
 
+    # If the request session is closed (production), create a fresh one.
+    # If it is open/active (tests), reuse it to participate in the test transaction.
+    session_to_use = db
+    is_external_session = False
+    
+    if db:
+        try:
+            if db.is_active:
+                is_external_session = True
+        except Exception:
+            pass
+
+    if not is_external_session:
+        session_to_use = AsyncSessionLocal()
+
     try:
-        click_repo = ClickRepository(db)
+        click_repo = ClickRepository(session_to_use)
         await click_repo.create_click(
             link_id=link_id,
             country=country,
@@ -73,11 +88,14 @@ async def record_click(
             user_agent=user_agent,
             ip_address=client_ip,
         )
-        await db.commit()
-    except Exception:
-        # Never let a failed click recording break anything
-        # The redirect already happened — the user is fine
-        await db.rollback()
+        await session_to_use.commit()
+    except Exception as e:
+        import logging
+        logging.getLogger("uvicorn.error").error(f"Failed to record click: {e}")
+        await session_to_use.rollback()
+    finally:
+        if not is_external_session:
+            await session_to_use.close()
 
 
 @router.get(

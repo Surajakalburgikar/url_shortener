@@ -159,8 +159,9 @@ const Dashboard = () => {
       setExpiryDate('');
       setExpiryTime('');
       
-      // Refresh list
+      // Refresh list and analytics
       fetchLinks();
+      fetchAnalytics();
     } catch (err) {
       setCreateError(err.response?.data?.detail || 'Failed to create link');
     } finally {
@@ -182,17 +183,48 @@ const Dashboard = () => {
         setSelectedLink(null);
       }
       
+      // Refresh list and analytics
       fetchLinks();
+      fetchAnalytics();
     } catch (err) {
       alert(err.response?.data?.detail || 'Failed to delete link');
     }
   };
 
-  // Prepare chart data: fill missing days with 0 or map directly
-  const chartData = analytics?.clicks_per_day?.map(item => ({
-    name: new Date(item.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-    Clicks: item.click_count,
-  })) || [];
+  // Prepare chart data: fill missing days of the last 30 days with 0 clicks
+  const chartData = React.useMemo(() => {
+    if (!analytics || !analytics.clicks_per_day) return [];
+    
+    // Map existing click count values by date string (YYYY-MM-DD)
+    const clickMap = {};
+    analytics.clicks_per_day.forEach(item => {
+      clickMap[item.date] = item.click_count;
+    });
+
+    const data = [];
+    const today = new Date();
+
+    // Generate the last 30 days continuous timeline
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(today.getDate() - i);
+      
+      // Format to YYYY-MM-DD in local time
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+      
+      const count = clickMap[dateStr] || 0;
+      
+      data.push({
+        name: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+        Clicks: count,
+      });
+    }
+
+    return data;
+  }, [analytics]);
 
   return (
     <div className="container">
