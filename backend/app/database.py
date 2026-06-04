@@ -16,7 +16,9 @@ Connection pooling explained:
 - pool_recycle=1800: Replace connections older than 30 minutes (prevents stale connections)
 """
 
+import uuid
 from collections.abc import AsyncGenerator
+
 
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -39,9 +41,12 @@ engine = create_async_engine(
     pool_timeout=30,
     pool_recycle=1800,
     connect_args={
-        "prepared_statement_cache_size": 0,
+        "statement_cache_size": 0,
+        "prepared_statement_name_func": lambda: f"__asyncpg_{uuid.uuid4().hex}__",
     },
 )
+
+
 
 
 
