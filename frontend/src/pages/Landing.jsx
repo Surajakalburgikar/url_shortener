@@ -6,6 +6,7 @@ const Landing = () => {
   useEffect(() => {
     document.title = "Brief.ly — Minimalist URL Shortener";
   }, []);
+  
   const [originalUrl, setOriginalUrl] = useState('');
   const [customAlias, setCustomAlias] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
@@ -59,10 +60,12 @@ const Landing = () => {
   };
 
   return (
-    <div className="container" style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+    <div className="container" style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: '80vh' }}>
       <div className="hero-section">
-        <h1 className="hero-title">Simplify your link management</h1>
-        <p className="hero-subtitle">
+        <h1 className="hero-title" style={{ fontSize: '3.8rem', fontWeight: '400', color: 'var(--text-heading)', marginBottom: '1.25rem' }}>
+          Simplify your link management
+        </h1>
+        <p className="hero-subtitle" style={{ maxWidth: '640px', margin: '0 auto 3rem', color: 'var(--text-body)', fontSize: '1.1rem', fontWeight: '300' }}>
           Brief.ly is a clean, modern URL shortener built to provide fast redirections and comprehensive, real-time analytics dashboards.
         </p>
 
@@ -77,8 +80,9 @@ const Landing = () => {
                 placeholder="Paste your long link here (e.g. https://example.com/very/long/path)"
                 value={originalUrl}
                 onChange={(e) => setOriginalUrl(e.target.value)}
+                style={{ padding: '0.85rem 1.25rem', fontSize: '0.95rem' }}
               />
-              <button type="submit" disabled={loading} className="btn btn-primary">
+              <button type="submit" disabled={loading} className="btn btn-primary" style={{ padding: '0.85rem 1.75rem' }}>
                 {loading ? 'Shortening...' : 'Shorten URL'}
               </button>
             </div>
@@ -90,8 +94,8 @@ const Landing = () => {
                 onClick={() => setShowAdvanced(!showAdvanced)}
               >
                 <svg
-                  width="14"
-                  height="14"
+                  width="12"
+                  height="12"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -99,6 +103,7 @@ const Landing = () => {
                   style={{
                     transform: showAdvanced ? 'rotate(90deg)' : 'none',
                     transition: 'transform 0.15s ease',
+                    color: 'var(--gold-accent)',
                   }}
                 >
                   <polyline points="9 18 15 12 9 6" />
@@ -146,15 +151,15 @@ const Landing = () => {
 
           {shortUrl && (
             <div className="result-box">
-              <div>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.2rem' }}>
+              <div style={{ flex: 1 }}>
+                <span className="small-label" style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.3rem' }}>
                   Your shortened link is ready:
                 </span>
                 <a href={shortUrl} target="_blank" rel="noopener noreferrer" className="result-url">
                   {shortUrl}
                 </a>
               </div>
-              <button onClick={handleCopy} className="btn btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}>
+              <button onClick={handleCopy} className="btn btn-primary" style={{ padding: '0.6rem 1.25rem', fontSize: '0.85rem' }}>
                 {copied ? 'Copied!' : 'Copy'}
               </button>
             </div>
