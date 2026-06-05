@@ -24,18 +24,19 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     
-    // Check if the error is 401, we haven't retried yet, and it's not the refresh endpoint itself
+    // Check if the error is 401, we haven't retried yet, and it's not the refresh or me endpoint
     if (
       error.response?.status === 401 &&
       originalRequest &&
       !originalRequest._retry &&
-      !originalRequest.url?.includes('/auth/refresh')
+      !originalRequest.url?.includes('/auth/refresh') &&
+      !originalRequest.url?.includes('/auth/me')
     ) {
       originalRequest._retry = true;
       
       try {
-        // Call refresh endpoint to get new access token via cookies
-        await axios.post(`${API_BASE_URL}/api/v1/auth/refresh`, {}, { withCredentials: true });
+        // null body -> FastAPI reads refresh_token from httpOnly cookie
+        await axios.post(`${API_BASE_URL}/api/v1/auth/refresh`, null, { withCredentials: true });
         
         // Retry the original request (new cookies will be automatically attached)
         return api(originalRequest);
