@@ -135,8 +135,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
 )
 
 
@@ -178,7 +178,10 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 security = HTTPBasic()
 
 def authenticate_docs(credentials: HTTPBasicCredentials = Depends(security)):
-    if not (credentials.username == settings.docs_username and credentials.password == settings.docs_password):
+    import secrets
+    correct_username = secrets.compare_digest(credentials.username, settings.docs_username)
+    correct_password = secrets.compare_digest(credentials.password, settings.docs_password)
+    if not (correct_username and correct_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",

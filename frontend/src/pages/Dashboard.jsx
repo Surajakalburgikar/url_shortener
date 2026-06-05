@@ -9,6 +9,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import api from '../api/axios';
+import { parseExpiryDateTime } from '../utils/parseExpiry';
 
 const Dashboard = () => {
   const [links, setLinks] = useState([]);
@@ -23,6 +24,12 @@ const Dashboard = () => {
   const [createError, setCreateError] = useState('');
   const [createSuccess, setCreateSuccess] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteError, setDeleteError] = useState('');
+
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [totalLinks, setTotalLinks] = useState(0);
+  const PAGE_SIZE = 10;
 
   // Selection state
   // null = Global/All Links, otherwise holds selected link object
@@ -49,23 +56,21 @@ const Dashboard = () => {
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
   // Fetch all user links
-  const fetchLinks = async () => {
+  const fetchLinks = useCallback(async (targetPage = page) => {
     setLoadingLinks(true);
     try {
       const response = await api.get('/api/v1/links', {
-        params: { page: 1, page_size: 100 },
+        params: { page: targetPage, page_size: PAGE_SIZE },
       });
       const fetchedLinks = response.data.items || [];
       setLinks(fetchedLinks);
+      setTotalLinks(response.data.total || 0);
       
       const storedShortCode = localStorage.getItem('selected_short_code');
       if (storedShortCode) {
         const matchedLink = fetchedLinks.find(link => link.short_code === storedShortCode);
         if (matchedLink) {
           setSelectedLink(matchedLink);
-        } else {
-          localStorage.removeItem('selected_short_code');
-          setSelectedLink(null);
         }
       }
     } catch (err) {
@@ -73,7 +78,7 @@ const Dashboard = () => {
     } finally {
       setLoadingLinks(false);
     }
-  };
+  }, [page]);
 
   // Fetch analytics (either global or specific link)
   const fetchAnalytics = useCallback(async () => {
@@ -96,8 +101,8 @@ const Dashboard = () => {
   }, [selectedLink]);
 
   useEffect(() => {
-    fetchLinks();
-  }, []);
+    fetchLinks(page);
+  }, [page, fetchLinks]);
 
   useEffect(() => {
     fetchAnalytics();
@@ -111,63 +116,12 @@ const Dashboard = () => {
 
     try {
       let parsedExpiry = null;
-      if (expiryDate.trim()) {
-        const cleanedDate = expiryDate.trim();
-        let date = null;
-
-        // Try YYYY-MM-DD
-        const yyyymmdd = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(cleanedDate);
-        if (yyyymmdd) {
-          const year = parseInt(yyyymmdd[1], 10);
-          const month = parseInt(yyyymmdd[2], 10) - 1;
-          const day = parseInt(yyyymmdd[3], 10);
-          date = new Date(year, month, day);
-        } else {
-          // Try DD-MM-YYYY or DD/MM/YYYY
-          const ddmmyyyy = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/.exec(cleanedDate);
-          if (ddmmyyyy) {
-            const day = parseInt(ddmmyyyy[1], 10);
-            const month = parseInt(ddmmyyyy[2], 10) - 1;
-            const year = parseInt(ddmmyyyy[3], 10);
-            date = new Date(year, month, day);
-          } else {
-            // Standard parse fallback
-            date = new Date(cleanedDate);
-          }
-        }
-
-        if (!date || isNaN(date.getTime())) {
-          setCreateError('Invalid date format. Please use YYYY-MM-DD or select using the calendar.');
-          setCreating(false);
-          return;
-        }
-
-        // Apply time if provided
-        if (expiryTime.trim()) {
-          const timeParts = /^(\d{1,2}):(\d{2})$/.exec(expiryTime.trim());
-          if (timeParts) {
-            const hours = parseInt(timeParts[1], 10);
-            const minutes = parseInt(timeParts[2], 10);
-            date.setHours(hours, minutes, 0, 0);
-          } else {
-            const timeVal = new Date(`1970-01-01T${expiryTime.trim()}`);
-            if (!isNaN(timeVal.getTime())) {
-              date.setHours(timeVal.getHours(), timeVal.getMinutes(), 0, 0);
-            }
-          }
-        } else {
-          // Time is optional — default to end of that day (23:59:59)
-          date.setHours(23, 59, 59, 999);
-        }
-
-        // Validate future date
-        if (date.getTime() <= Date.now()) {
-          setCreateError('Expiration date must be in the future.');
-          setCreating(false);
-          return;
-        }
-
-        parsedExpiry = date.toISOString();
+      try {
+        parsedExpiry = parseExpiryDateTime(expiryDate, expiryTime);
+      } catch (dateErr) {
+        setCreateError(dateErr.message);
+        setCreating(false);
+        return;
       }
 
       const payload = {
@@ -186,7 +140,7 @@ const Dashboard = () => {
       setExpiryTime('');
       
       // Refresh list and analytics
-      fetchLinks();
+      fetchLinks(page);
       fetchAnalytics();
     } catch (err) {
       setCreateError(err.response?.data?.detail || 'Failed to create link');
@@ -202,6 +156,7 @@ const Dashboard = () => {
 
   const confirmDeleteLink = async () => {
     if (!deleteTarget) return;
+    setDeleteError('');
     try {
       await api.delete(`/api/v1/links/${deleteTarget}`);
       
@@ -211,10 +166,10 @@ const Dashboard = () => {
       }
       
       // Refresh list and analytics
-      fetchLinks();
+      fetchLinks(page);
       fetchAnalytics();
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to delete link');
+      setDeleteError(err.response?.data?.detail || 'Failed to delete link');
     } finally {
       setDeleteTarget(null);
     }
@@ -333,6 +288,26 @@ const Dashboard = () => {
               </button>
             </div>
 
+            {deleteError && (
+              <div className="alert alert-danger" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <span>{deleteError}</span>
+                <button
+                  onClick={() => setDeleteError('')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'inherit',
+                    cursor: 'pointer',
+                    fontSize: '1.25rem',
+                    lineHeight: '1',
+                    padding: '0 0.5rem',
+                  }}
+                >
+                  &times;
+                </button>
+              </div>
+            )}
+
             {loadingLinks ? (
               <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-secondary)' }}>Loading links...</div>
             ) : links.length === 0 ? (
@@ -398,6 +373,31 @@ const Dashboard = () => {
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Pagination UI */}
+            {totalLinks > PAGE_SIZE && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
+                <button
+                  disabled={page === 1}
+                  className="btn btn-secondary"
+                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+                  onClick={() => setPage(prev => Math.max(prev - 1, 1))}
+                >
+                  Previous
+                </button>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  Page {page} of {Math.ceil(totalLinks / PAGE_SIZE)} ({totalLinks} total links)
+                </span>
+                <button
+                  disabled={page * PAGE_SIZE >= totalLinks}
+                  className="btn btn-secondary"
+                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+                  onClick={() => setPage(prev => prev + 1)}
+                >
+                  Next
+                </button>
               </div>
             )}
           </div>

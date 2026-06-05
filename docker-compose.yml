@@ -11,7 +11,7 @@ services:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/urlshortener
       - REDIS_URL=redis://redis:6379/0
       - ENVIRONMENT=production
-      - SECRET_KEY=some_very_long_random_and_secure_production_secret_key
+      - SECRET_KEY=${SECRET_KEY}
       - ACCESS_TOKEN_EXPIRE_MINUTES=30
       - REFRESH_TOKEN_EXPIRE_DAYS=7
     depends_on:

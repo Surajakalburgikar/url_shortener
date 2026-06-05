@@ -11,10 +11,9 @@ Responsibilities:
 - Coordinate between LinkRepository and Redis
 """
 
-import random
 import re
-import string
 import uuid
+import secrets
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
@@ -24,14 +23,13 @@ from app.repositories.link_repo import LinkRepository
 from app.schemas.link import LinkCreate, LinkListResponse, LinkResponse
 
 # Characters used for random short codes, excluding visually confusing ones:
-# 0 (zero), O (capital o), 1 (one), I (capital i), l (lowercase L)
-ALPHABET = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+# 0 (zero), O (capital o), o (lowercase o), 1 (one), I (capital i), i (lowercase i), l (lowercase L), L (capital L)
+ALPHABET = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789"
 SHORT_CODE_LENGTH = 6
 
 
 def generate_short_code() -> str:
     """Generate a cryptographically secure random 6-character short code."""
-    import secrets
     return "".join(secrets.choice(ALPHABET) for _ in range(SHORT_CODE_LENGTH))
 
 

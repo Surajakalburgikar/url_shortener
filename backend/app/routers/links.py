@@ -134,11 +134,14 @@ async def _check_rate_limit(request: Request, user: User | None) -> None:
         if val == 1 then
             redis.call('expire', key, ttl)
         end
-        return val
+        if val > limit then
+            return 0
+        end
+        return 1
         """
-        count = await redis_client.eval(lua_script, 1, key, limit, 3600)
+        allowed = await redis_client.eval(lua_script, 1, key, limit, 3600)
 
-        if count > limit:
+        if allowed == 0:
             raise HTTPException(
                 status_code=429,
                 detail=f"Rate limit exceeded. {'Authenticated' if user else 'Anonymous'} users can create {limit} links per hour.",

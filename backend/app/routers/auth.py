@@ -60,9 +60,14 @@ async def register(data: UserCreate, db: AsyncSession = Depends(get_db)) -> Toke
     "/login",
     response_model=Token,
     summary="Login with email and password",
-    description="Returns JWT access + refresh tokens on successful authentication.",
+    description="Returns JWT access + refresh tokens on successful authentication. Rate limited.",
 )
-async def login(data: UserLogin, db: AsyncSession = Depends(get_db)) -> Token:
+async def login(
+    request: Request,
+    data: UserLogin,
+    db: AsyncSession = Depends(get_db),
+) -> Token:
+    await _check_login_rate_limit(request)
     service = AuthService(db)
     return await service.login(data.email, data.password)
 
@@ -173,3 +178,46 @@ async def oauth_exchange(
 ) -> Token:
     service = AuthService(db)
     return await service.exchange_oauth_token(data.code)
+
+
+async def _check_login_rate_limit(request: Request) -> None:
+    """Limit login attempts by IP to prevent brute-force attacks."""
+    from fastapi import HTTPException
+    from app.main import redis_client
+    if not redis_client:
+        return
+
+    try:
+        client_ip = request.client.host if request.client else "unknown"
+        key = f"ratelimit:login:{client_ip}"
+        limit = 10
+        ttl = 900 # 15 minutes
+
+        lua_script = """
+        local key = KEYS[1]
+        local limit = tonumber(ARGV[1])
+        local ttl = tonumber(ARGV[2])
+        local val = redis.call('incr', key)
+        if val == 1 then
+            redis.call('expire', key, ttl)
+        end
+        if val > limit then
+            return 0
+        end
+        return 1
+        """
+        allowed = await redis_client.eval(lua_script, 1, key, limit, ttl)
+
+        if allowed == 0:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many login attempts. Please try again in 15 minutes.",
+                headers={"Retry-After": str(ttl)},
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        import structlog
+        log = structlog.get_logger()
+        log.warning("ratelimit.login_redis_error", error=str(e))
+        return  # Fail open

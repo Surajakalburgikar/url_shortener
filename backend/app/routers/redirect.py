@@ -19,6 +19,7 @@ Why 307 (Temporary Redirect) instead of 301 (Permanent)?
 
 import uuid
 import structlog
+import httpx
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from fastapi.responses import RedirectResponse
@@ -32,19 +33,20 @@ from app.services.link_service import LinkService
 router = APIRouter(tags=["redirect"])
 log = structlog.get_logger()
 
+# Persistent AsyncClient with connection pooling for GeoIP lookups
+http_client = httpx.AsyncClient(timeout=1.0)
+
 
 async def resolve_country_from_ip(ip: str | None) -> str | None:
     """Resolve IP address to 2-letter country code via ip2c.org."""
     if not ip or ip in ("127.0.0.1", "::1", "localhost") or ip.startswith("192.168.") or ip.startswith("10."):
         return "LO"
-    import httpx
     try:
-        async with httpx.AsyncClient(timeout=1.0) as client:
-            resp = await client.get(f"http://ip2c.org/{ip}")
-            if resp.status_code == 200:
-                parts = resp.text.split(";")
-                if len(parts) >= 4 and parts[0] == "1":
-                    return parts[1]
+        resp = await http_client.get(f"https://ip2c.org/{ip}")
+        if resp.status_code == 200:
+            parts = resp.text.split(";")
+            if len(parts) >= 4 and parts[0] == "1":
+                return parts[1]
     except Exception as e:
         log.warning("ip_lookup_failed", ip=ip, error=str(e))
     return "ZZ"
@@ -146,6 +148,9 @@ async def redirect_to_url(
     original_url, link_id = await service.get_original_url(short_code)
 
     # Schedule click recording — runs after this function returns the redirect
-    background_tasks.add_task(record_click, link_id, request, db)
+    if settings.is_testing:
+        background_tasks.add_task(record_click, link_id, request, db)
+    else:
+        background_tasks.add_task(record_click, link_id, request)
 
     return RedirectResponse(url=original_url, status_code=307)

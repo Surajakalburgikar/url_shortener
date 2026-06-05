@@ -29,7 +29,12 @@ class CorrelationIdMiddleware:
         request_id = str(uuid.uuid4())
         for key, value in scope.get("headers", []):
             if key.lower() == REQUEST_ID_HEADER.lower().encode("latin-1"):
-                request_id = value.decode("latin-1")
+                incoming_id = value.decode("latin-1")
+                try:
+                    uuid.UUID(incoming_id)
+                    request_id = incoming_id
+                except ValueError:
+                    pass
                 break
 
         # Bind to structlog logging context
