@@ -41,8 +41,6 @@ const Dashboard = () => {
   const [expiryDate, setExpiryDate] = useState('');
   const [expiryTime, setExpiryTime] = useState('');
   const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState('');
-  const [createSuccess, setCreateSuccess] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
   // Rate limit state (fetched from backend)
   const [rateLimitData, setRateLimitData] = useState(null);
@@ -179,15 +177,12 @@ const Dashboard = () => {
   const handleCreateLink = async (e) => {
     e.preventDefault();
     setCreating(true);
-    setCreateError('');
-    setCreateSuccess('');
 
     try {
       let parsedExpiry = null;
       try {
         parsedExpiry = parseExpiryDateTime(expiryDate, expiryTime);
       } catch (dateErr) {
-        setCreateError(dateErr.message);
         addToast(dateErr.message, 'danger');
         setCreating(false);
         return;
@@ -201,7 +196,6 @@ const Dashboard = () => {
 
       const response = await api.post('/api/v1/links', payload);
       const newShortCode = response.data.short_code;
-      setCreateSuccess(`Shortened link created: ${newShortCode}`);
       addToast(`Shortened link created: /${newShortCode}`, 'success');
       
       // Reset form
@@ -217,7 +211,6 @@ const Dashboard = () => {
       fetchRateLimit();
     } catch (err) {
       const msg = err.response?.data?.detail || 'Failed to create link';
-      setCreateError(msg);
       addToast(msg, 'danger');
     } finally {
       setCreating(false);
