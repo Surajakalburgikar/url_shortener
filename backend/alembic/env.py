@@ -16,6 +16,12 @@ How migrations work:
 4. You run `alembic upgrade head` to apply all pending migrations
 """
 
+import os
+import sys
+
+# Dynamically add the backend directory to sys.path so 'app' can be found during migration runs
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import asyncio
 from logging.config import fileConfig
 
