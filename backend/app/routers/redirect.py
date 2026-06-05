@@ -33,23 +33,45 @@ from app.services.link_service import LinkService
 router = APIRouter(tags=["redirect"])
 log = structlog.get_logger()
 
-# Persistent AsyncClient with connection pooling for GeoIP lookups
-http_client = httpx.AsyncClient(timeout=1.0)
+import geoip2.database
+import geoip2.errors
+import os
+
+_geoip_reader = None
+
+def get_geoip_reader():
+    global _geoip_reader
+    if _geoip_reader is None:
+        paths = [
+            "GeoLite2-Country.mmdb",
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "GeoLite2-Country.mmdb"),
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "GeoLite2-Country.mmdb"),
+        ]
+        for path in paths:
+            if os.path.exists(path):
+                try:
+                    _geoip_reader = geoip2.database.Reader(path)
+                    break
+                except Exception:
+                    pass
+    return _geoip_reader
 
 
-async def resolve_country_from_ip(ip: str | None) -> str | None:
-    """Resolve IP address to 2-letter country code via ip2c.org."""
+def resolve_country_from_ip(ip: str | None) -> str | None:
+    """Resolve IP address to 2-letter country code using local GeoLite2 DB."""
     if not ip or ip in ("127.0.0.1", "::1", "localhost") or ip.startswith("192.168.") or ip.startswith("10."):
         return "LO"
+    reader = get_geoip_reader()
+    if not reader:
+        return "ZZ"
     try:
-        resp = await http_client.get(f"https://ip2c.org/{ip}")
-        if resp.status_code == 200:
-            parts = resp.text.split(";")
-            if len(parts) >= 4 and parts[0] == "1":
-                return parts[1]
+        response = reader.country(ip)
+        return response.country.iso_code or "ZZ"
+    except geoip2.errors.AddressNotFoundError:
+        return "ZZ"
     except Exception as e:
         log.warning("ip_lookup_failed", ip=ip, error=str(e))
-    return "ZZ"
+        return "ZZ"
 
 
 async def record_click(
@@ -82,8 +104,8 @@ async def record_click(
         except Exception:
             pass
 
-    # Country detection from IP via ip2c.org
-    country = await resolve_country_from_ip(client_ip)
+    # Country detection from IP via local GeoLite2 DB
+    country = resolve_country_from_ip(client_ip)
 
     # If we are running tests, reuse the transaction session to keep database isolation intact.
     # Otherwise, allocate a fresh database session for the background thread.

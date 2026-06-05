@@ -72,6 +72,7 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Logout request failed:', error);
     } finally {
+      localStorage.removeItem('selected_short_code');
       setUser(null);
     }
   };

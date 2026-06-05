@@ -21,7 +21,7 @@ import logging
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI, Request, status, Depends, HTTPException
+from fastapi import FastAPI, Request, status, Depends, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -86,10 +86,7 @@ async def lifespan(app: FastAPI):
         await redis_client.close()
         log.info("shutdown.redis_closed")
 
-    # Always close the GeoIP http client, regardless of Redis status
-    from app.routers.redirect import http_client as geo_http_client
-    await geo_http_client.aclose()
-    log.info("shutdown.geo_http_client_closed")
+
 
 
 app = FastAPI(
@@ -105,7 +102,7 @@ app = FastAPI(
     version=settings.app_version,
     contact={
         "name": "URL Shortener API",
-        "url": "https://github.com/yourusername/url-shortener",
+        "url": "https://github.com/Surajakalburgikar/url_shortener",
     },
     license_info={"name": "MIT"},
     openapi_tags=[
@@ -230,6 +227,13 @@ app.include_router(analytics.router, prefix=API_PREFIX) # /api/v1/analytics/*
 # Redirect must be LAST — it matches /{short_code} which would otherwise
 # catch /api, /docs, /health etc. if registered first
 app.include_router(redirect.router)                     # /{short_code}
+
+
+# ── Favicon ───────────────────────────────────────────────────────────────────
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return Response(status_code=204)
 
 
 # ── Root endpoint ─────────────────────────────────────────────────────────────

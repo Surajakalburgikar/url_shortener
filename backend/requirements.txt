@@ -43,3 +43,4 @@ locust==2.32.2  # Load testing tool — simulates hundreds of concurrent users
 # ── Utilities ─────────────────────────────────────────────────────────────────
 python-multipart==0.0.12  # Required for FastAPI to parse form data (OAuth flows)
 email-validator==2.2.0    # Validates email format in Pydantic schemas
+geoip2==4.8.0             # Local MaxMind GeoIP lookup database client

@@ -113,3 +113,20 @@ async def test_delete_link_success(client: AsyncClient, db_session: AsyncSession
     )
     link = result.scalar_one_or_none()
     assert link is None
+
+
+async def test_expired_link_returns_410(client: AsyncClient, db_session: AsyncSession) -> None:
+    """Test that visiting an expired link returns a 410 Gone status code."""
+    from datetime import datetime, timedelta, timezone
+    from app.models.link import Link
+    
+    expired_link = Link(
+        short_code="expired-alias",
+        original_url="https://expired.com",
+        expires_at=datetime.now(timezone.utc) - timedelta(hours=1)
+    )
+    db_session.add(expired_link)
+    await db_session.commit()
+    
+    response = await client.get("/expired-alias", follow_redirects=False)
+    assert response.status_code == 410

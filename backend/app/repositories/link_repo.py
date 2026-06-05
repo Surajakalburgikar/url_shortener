@@ -35,11 +35,7 @@ class LinkRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_by_id(self, link_id: uuid.UUID) -> Link | None:
-        result = await self.db.execute(
-            select(Link).where(Link.id == link_id)
-        )
-        return result.scalar_one_or_none()
+
 
     async def short_code_exists(self, short_code: str) -> bool:
         """Check if a short code is already taken — used before creating with custom alias."""

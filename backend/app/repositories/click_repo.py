@@ -69,13 +69,13 @@ class ClickRepository:
 
         result = await self.db.execute(
             select(
-                func.date_trunc("day", Click.clicked_at).label("day"),
+                func.date_trunc(text("'day'"), Click.clicked_at).label("day"),
                 func.count(Click.id).label("count"),
             )
             .where(Click.link_id == link_id)
             .where(Click.clicked_at >= since)
-            .group_by(func.date_trunc("day", Click.clicked_at))
-            .order_by(func.date_trunc("day", Click.clicked_at))
+            .group_by(func.date_trunc(text("'day'"), Click.clicked_at))
+            .order_by(func.date_trunc(text("'day'"), Click.clicked_at))
         )
 
         return [
@@ -146,14 +146,14 @@ class ClickRepository:
 
         result = await self.db.execute(
             select(
-                func.date_trunc("day", Click.clicked_at).label("day"),
+                func.date_trunc(text("'day'"), Click.clicked_at).label("day"),
                 func.count(Click.id).label("count"),
             )
             .join(Link, Click.link_id == Link.id)
             .where(Link.user_id == user_id)
             .where(Click.clicked_at >= since)
-            .group_by(func.date_trunc("day", Click.clicked_at))
-            .order_by(func.date_trunc("day", Click.clicked_at))
+            .group_by(func.date_trunc(text("'day'"), Click.clicked_at))
+            .order_by(func.date_trunc(text("'day'"), Click.clicked_at))
         )
         return [
             DailyClick(date=row.day.date().isoformat(), click_count=row.count)
