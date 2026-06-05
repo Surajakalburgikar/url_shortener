@@ -25,6 +25,7 @@ const Dashboard = () => {
   const [createSuccess, setCreateSuccess] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteError, setDeleteError] = useState('');
+  const [copiedCode, setCopiedCode] = useState(null);
 
   // Pagination state
   const [page, setPage] = useState(1);
@@ -158,6 +159,15 @@ const Dashboard = () => {
   const handleDeleteLink = (shortCode, e) => {
     e.stopPropagation(); // Prevent selection trigger
     setDeleteTarget(shortCode);
+  };
+
+  const handleCopy = (shortCode, e) => {
+    e.stopPropagation();
+    const shortUrl = `${apiBaseUrl}/${shortCode}`;
+    navigator.clipboard.writeText(shortUrl).then(() => {
+      setCopiedCode(shortCode);
+      setTimeout(() => setCopiedCode(null), 2000);
+    });
   };
 
   const confirmDeleteLink = async () => {
@@ -364,7 +374,19 @@ const Dashboard = () => {
                           )}
                         </div>
                       </div>
-                      <div className="link-actions">
+                      <div className="link-actions" style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button
+                          onClick={(e) => handleCopy(link.short_code, e)}
+                          className="btn btn-secondary"
+                          style={{
+                            padding: '0.4rem 0.6rem',
+                            fontSize: '0.8rem',
+                            color: copiedCode === link.short_code ? 'var(--success)' : 'var(--text-secondary)',
+                            borderColor: copiedCode === link.short_code ? 'var(--success)' : 'var(--border-color)',
+                          }}
+                        >
+                          {copiedCode === link.short_code ? 'Copied!' : 'Copy'}
+                        </button>
                         <button
                           onClick={(e) => handleDeleteLink(link.short_code, e)}
                           className="btn btn-secondary"
