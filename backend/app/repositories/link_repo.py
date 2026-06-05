@@ -109,10 +109,4 @@ class LinkRepository:
         await self.db.delete(link)
         await self.db.commit()
 
-    async def get_click_count(self, link_id: uuid.UUID) -> int:
-        """Get total click count for a single link."""
-        from app.models.click import Click
-        result = await self.db.execute(
-            select(func.count(Click.id)).where(Click.link_id == link_id)
-        )
-        return result.scalar_one() or 0
+

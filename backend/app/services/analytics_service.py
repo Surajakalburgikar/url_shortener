@@ -8,7 +8,6 @@ Its job is to orchestrate the repository calls and assemble the response schema.
 """
 
 import uuid
-import asyncio
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
