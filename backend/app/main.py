@@ -85,6 +85,8 @@ async def lifespan(app: FastAPI):
     if redis_client:
         await redis_client.close()
         log.info("shutdown.redis_closed")
+
+    # Always close the GeoIP http client, regardless of Redis status
     from app.routers.redirect import http_client as geo_http_client
     await geo_http_client.aclose()
     log.info("shutdown.geo_http_client_closed")

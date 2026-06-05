@@ -240,8 +240,9 @@ async def oauth_exchange(
 )
 async def logout(response: Response):
     samesite = "none" if settings.app_env == "production" else "lax"
-    response.delete_cookie("access_token", samesite=samesite, secure=True)
-    response.delete_cookie("refresh_token", samesite=samesite, secure=True)
+    is_secure = settings.app_env == "production"
+    response.delete_cookie("access_token", samesite=samesite, secure=is_secure)
+    response.delete_cookie("refresh_token", samesite=samesite, secure=is_secure)
     return {"detail": "Logged out successfully"}
 
 

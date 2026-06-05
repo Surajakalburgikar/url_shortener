@@ -6,9 +6,8 @@ const Register = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { register } = useAuth();
+  const { register, loading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -17,18 +16,15 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
 
     if (password.length < 8 || password.length > 128) {
       setError('Password must be between 8 and 128 characters.');
-      setLoading(false);
       return;
     }
 
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
-      setLoading(false);
       return;
     }
 
@@ -37,8 +33,6 @@ const Register = () => {
       navigate('/dashboard');
     } catch (err) {
       setError(err);
-    } finally {
-      setLoading(false);
     }
   };
 

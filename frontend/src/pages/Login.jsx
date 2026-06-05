@@ -5,9 +5,8 @@ import { useAuth } from '../context/AuthContext';
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { login } = useAuth();
+  const { login, loading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -16,7 +15,6 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
 
     try {
@@ -24,8 +22,6 @@ const Login = () => {
       navigate('/dashboard');
     } catch (err) {
       setError(err);
-    } finally {
-      setLoading(false);
     }
   };
 
