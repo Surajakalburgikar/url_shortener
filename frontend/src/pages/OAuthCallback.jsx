@@ -57,14 +57,14 @@ const OAuthCallback = () => {
   }, [searchParams, loginWithOAuth, navigate]);
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#090d16', flexDirection: 'column', gap: '1rem', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: 'var(--bg-primary)', flexDirection: 'column', gap: '1rem', fontFamily: 'Inter, sans-serif' }}>
       {errorMsg ? (
         <div style={{ textAlign: 'center', padding: '2rem' }}>
-          <div style={{ color: '#ef4444', fontSize: '1.2rem', marginBottom: '1rem' }}>{errorMsg}</div>
-          <Link to="/login" style={{ color: '#8b5cf6', textDecoration: 'underline' }}>Back to Login</Link>
+          <div style={{ color: 'var(--danger)', fontSize: '1.2rem', marginBottom: '1rem' }}>{errorMsg}</div>
+          <Link to="/login" style={{ color: 'var(--gold-accent)', textDecoration: 'underline' }}>Back to Login</Link>
         </div>
       ) : (
-        <div style={{ color: '#94a3b8', fontSize: '1rem' }}>Completing login...</div>
+        <div style={{ color: 'var(--text-body)', fontSize: '1rem' }}>Completing login...</div>
       )}
     </div>
   );
