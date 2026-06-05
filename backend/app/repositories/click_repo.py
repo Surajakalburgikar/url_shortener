@@ -74,8 +74,8 @@ class ClickRepository:
             )
             .where(Click.link_id == link_id)
             .where(Click.clicked_at >= since)
-            .group_by(func.date_trunc(text("'day'"), Click.clicked_at))
-            .order_by(func.date_trunc(text("'day'"), Click.clicked_at))
+            .group_by(text("day"))
+            .order_by(text("day"))
         )
 
         return [
@@ -152,8 +152,8 @@ class ClickRepository:
             .join(Link, Click.link_id == Link.id)
             .where(Link.user_id == user_id)
             .where(Click.clicked_at >= since)
-            .group_by(func.date_trunc(text("'day'"), Click.clicked_at))
-            .order_by(func.date_trunc(text("'day'"), Click.clicked_at))
+            .group_by(text("day"))
+            .order_by(text("day"))
         )
         return [
             DailyClick(date=row.day.date().isoformat(), click_count=row.count)
