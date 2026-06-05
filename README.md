@@ -9,8 +9,8 @@
 **Live Demo:** https://url-shortener-mu-lilac.vercel.app  
 **API:** https://url-shortener-backend-6owv.onrender.com/health
 
-Brief.ly is a production-grade URL shortener and analytics platform with 
-sub-millisecond redirect speeds, real-time click analytics, and secure 
+Brief.ly is a production-grade URL shortener and analytics platform with
+sub-millisecond redirect speeds, real-time click analytics, and secure
 JWT authentication via httpOnly cookies.
 
 ---
@@ -23,7 +23,6 @@ graph TD
     User -->|HTTP GET Redirect| Redirect[FastAPI Redirect Router]
     Frontend -->|REST API| Backend[FastAPI Backend on Render]
     Backend -->|Async SQLAlchemy| PostgreSQL[(Supabase PostgreSQL)]
-
     Backend -->|Cache + Rate Limit| Redis[(Upstash Redis)]
     Redirect -->|Cache Hit| Redis
     Redirect -->|Cache Miss| PostgreSQL
@@ -37,9 +36,10 @@ graph TD
 - **httpOnly cookie auth** — JWT tokens never touch localStorage (XSS-safe)
 - **GitHub OAuth** — Secure one-time exchange token flow
 - **Atomic rate limiting** — Lua script in Redis (5/hr anon, 50/hr auth)
-- **Click analytics** — Country (GeoLite2), referrer, daily chart (30 days)
+- **Real-time click analytics** — Country (GeoLite2), referrer, 30-day daily chart with live polling
 - **Background tasks** — Click recording never blocks the redirect response
 - **SSRF prevention** — Private IP ranges blocked on URL input
+- **QR code generation** — Local browser-side SVG (no external API)
 - **Pagination** — Dashboard links list with page controls
 - **Custom aliases** — Set your own short code (e.g. `/my-link`)
 - **Link expiry** — Set expiration date and time per link
@@ -59,8 +59,7 @@ graph TD
 | GeoIP | MaxMind GeoLite2 (local, no API call) |
 | Frontend | React 19 + Vite |
 | Logging | structlog (JSON in production) |
-| Testing | pytest-anyio |
-| Load Testing | Locust |
+| Testing | pytest + anyio |
 | Backend Hosting | Render |
 | Frontend Hosting | Vercel |
 
@@ -147,21 +146,6 @@ pytest
 
 ---
 
-## 📊 Load Testing
-
-```bash
-cd backend
-# Windows:
-.\venv\Scripts\activate
-# Linux / Mac:
-source venv/bin/activate
-
-locust -f load-tests/locustfile.py --headless -u 10 -r 2 --run-time 30s \
-  --host http://localhost:8000
-```
-
----
-
 ## 🚀 Deployment
 
 ### Backend (Render)
@@ -194,16 +178,6 @@ DOCS_PASSWORD=<12+ chars>
 |-------|-------|
 | Framework | Vite |
 | Environment Variable | `VITE_API_BASE_URL=https://your-render-app.onrender.com` |
-
----
-
-## 💡 What I Learned
-
-- **Fail-open caching**: Redis is a performance layer, never a hard dependency — every Redis call is wrapped in try/except with PostgreSQL fallback
-- **httpOnly cookies over localStorage**: Tokens in localStorage are vulnerable to XSS; httpOnly cookies are inaccessible to JavaScript entirely
-- **Async session safety**: SQLAlchemy `AsyncSession` is not concurrency-safe — `asyncio.gather()` on a shared session causes `MissingGreenlet` errors
-- **PostgreSQL strict mode**: `GROUP BY date_trunc(...)` requires the alias in `ORDER BY` under strict PostgreSQL — SQLite is more lenient
-- **Background tasks**: FastAPI `BackgroundTask` runs after the response is sent — zero redirect latency from analytics writes
 
 ---
 
