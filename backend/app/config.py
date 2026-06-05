@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     # ── App ───────────────────────────────────────────────────────────────────
     app_env: Literal["development", "testing", "production"] = "development"
     app_version: str = "1.0.0"
+    docs_username: str = "admin"
+    docs_password: str = "admin"
 
     # ── Security ──────────────────────────────────────────────────────────────
     secret_key: str = Field(..., min_length=32)   # ... means REQUIRED — no default
@@ -61,7 +63,7 @@ class Settings(BaseSettings):
 
     # ── CORS / Frontend ───────────────────────────────────────────────────────
     frontend_url: str = "http://localhost:5173"
-    allowed_origins: str = "http://localhost:5173"
+    allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173,https://url-shortener-mu-lilac.vercel.app"
 
     # ── API ───────────────────────────────────────────────────────────────────
     api_version: str = "v1"

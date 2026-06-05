@@ -53,30 +53,37 @@ class LinkRepository:
         user_id: uuid.UUID,
         page: int = 1,
         page_size: int = 20,
-    ) -> tuple[list[Link], int]:
+    ) -> tuple[list[tuple[Link, int]], int]:
         """
-        List all links for a user, paginated, sorted newest first.
-        Uses the composite index on (user_id, created_at).
-        Returns (list_of_links, total_count).
+        List all links for a user alongside their click counts in a single query.
+        Uses a LEFT JOIN on Click and GROUP BY Link.id.
+        Returns (list_of_tuples_of_link_and_click_count, total_count).
         """
-        base_query = select(Link).where(Link.user_id == user_id)
+        from app.models.click import Click
 
-        # Get total count for pagination metadata
-        count_result = await self.db.execute(
-            select(func.count()).select_from(base_query.subquery())
-        )
-        total = count_result.scalar_one()
+        total = await self.count_user_links(user_id)
 
-        # Get paginated results
+        # Get paginated results with click counts
         offset = (page - 1) * page_size
         result = await self.db.execute(
-            base_query.order_by(Link.created_at.desc())
+            select(Link, func.count(Click.id).label("click_count"))
+            .outerjoin(Click, Link.id == Click.link_id)
+            .where(Link.user_id == user_id)
+            .group_by(Link.id)
+            .order_by(Link.created_at.desc())
             .offset(offset)
             .limit(page_size)
         )
-        links = list(result.scalars().all())
+        
+        links_with_counts = [(row[0], row[1]) for row in result.all()]
+        return links_with_counts, total
 
-        return links, total
+    async def count_user_links(self, user_id: uuid.UUID) -> int:
+        """Count total links belonging to a user without loading any link records."""
+        result = await self.db.execute(
+            select(func.count(Link.id)).where(Link.user_id == user_id)
+        )
+        return result.scalar_one() or 0
 
     async def create(
         self,

@@ -19,11 +19,15 @@ The order middleware is added MATTERS — they execute in reverse order:
 
 import logging
 import sys
+from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, status, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
+from fastapi.openapi.utils import get_openapi
 
 from app.config import settings
 from app.middleware.correlation_id import CorrelationIdMiddleware
@@ -57,6 +61,33 @@ redis_client = None
 
 # ── FastAPI app factory ───────────────────────────────────────────────────────
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Connect to Redis on startup and close on shutdown."""
+    global redis_client
+    if settings.redis_url:
+        try:
+            import redis.asyncio as aioredis
+            redis_client = aioredis.from_url(
+                settings.redis_url,
+                encoding="utf-8",
+                decode_responses=False,
+            )
+            await redis_client.ping()
+            log.info("startup.redis_connected", url=settings.redis_url[:30] + "...")
+        except Exception as e:
+            log.warning("startup.redis_unavailable", error=str(e))
+            redis_client = None
+    else:
+        log.info("startup.redis_skipped", reason="REDIS_URL not configured")
+        
+    yield
+    
+    if redis_client:
+        await redis_client.close()
+        log.info("shutdown.redis_closed")
+
+
 app = FastAPI(
     title="URL Shortener & Analytics API",
     description=(
@@ -80,53 +111,26 @@ app = FastAPI(
         {"name": "redirect", "description": "Short URL redirect endpoint"},
         {"name": "health", "description": "Health and readiness checks"},
     ],
-    # Disable default docs in production for security
-    docs_url="/docs" if not settings.is_production else None,
-    redoc_url="/redoc" if not settings.is_production else None,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+    lifespan=lifespan,
 )
-
-
-# ── Startup and shutdown ──────────────────────────────────────────────────────
-
-@app.on_event("startup")
-async def startup():
-    """Connect to Redis on startup."""
-    global redis_client
-    if not settings.redis_url:
-        log.info("startup.redis_skipped", reason="REDIS_URL not configured")
-        return
-    try:
-        import redis.asyncio as aioredis
-        redis_client = aioredis.from_url(
-            settings.redis_url,
-            encoding="utf-8",
-            decode_responses=False,
-        )
-        await redis_client.ping()
-        log.info("startup.redis_connected", url=settings.redis_url[:30] + "...")
-    except Exception as e:
-        log.warning("startup.redis_unavailable", error=str(e))
-        redis_client = None  # App still works — just without Redis cache/rate limiting
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    """Close Redis connection on shutdown."""
-    global redis_client
-    if redis_client:
-        await redis_client.close()
-        log.info("shutdown.redis_closed")
 
 
 # ── Middleware (added in reverse execution order) ─────────────────────────────
 
-# 3. Security headers — wraps everything
-app.add_middleware(SecurityHeadersMiddleware)
+# 4. Session Middleware — required by Authlib to maintain state between OAuth redirects
+from starlette.middleware.sessions import SessionMiddleware
+app.add_middleware(SessionMiddleware, secret_key=settings.secret_key)
 
-# 2. Correlation ID — generates UUID for every request
+# 3. Correlation ID — generates UUID for every request
 app.add_middleware(CorrelationIdMiddleware)
 
-# 1. CORS — must be innermost to correctly handle OPTIONS preflight
+# 2. Security headers
+app.add_middleware(SecurityHeadersMiddleware)
+
+# 1. CORS (outermost, so preflight OPTIONS are answered immediately)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins_list,
@@ -134,10 +138,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Starlette Session Middleware — required by Authlib to maintain state between OAuth redirects
-from starlette.middleware.sessions import SessionMiddleware
-app.add_middleware(SessionMiddleware, secret_key=settings.secret_key)
 
 
 # ── Global exception handler ──────────────────────────────────────────────────
@@ -172,6 +172,40 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
             "request_id": request_id,
         },
     )
+
+
+# ── Swagger / ReDoc Basic Auth ────────────────────────────────────────────────
+security = HTTPBasic()
+
+def authenticate_docs(credentials: HTTPBasicCredentials = Depends(security)):
+    if not (credentials.username == settings.docs_username and credentials.password == settings.docs_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
+if not settings.is_production:
+    @app.get("/openapi.json", include_in_schema=False)
+    async def get_open_api_endpoint(username: str = Depends(authenticate_docs)):
+        return get_openapi(title=app.title, version=app.version, routes=app.routes)
+
+    @app.get("/docs", include_in_schema=False)
+    async def get_swagger_html(username: str = Depends(authenticate_docs)):
+        return get_swagger_ui_html(
+            openapi_url="/openapi.json",
+            title=f"{app.title} - Swagger UI",
+            swagger_js_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js",
+            swagger_css_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css",
+        )
+
+    @app.get("/redoc", include_in_schema=False)
+    async def get_redoc_html_endpoint(username: str = Depends(authenticate_docs)):
+        return get_redoc_html(
+            openapi_url="/openapi.json",
+            title=f"{app.title} - ReDoc",
+        )
 
 
 # ── Routers ───────────────────────────────────────────────────────────────────

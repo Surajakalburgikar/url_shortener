@@ -19,14 +19,27 @@ GitHub OAuth flow (how it works):
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from authlib.integrations.starlette_client import OAuth
 
 from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.token import AccessToken, RefreshTokenRequest, Token
-from app.schemas.user import UserCreate, UserLogin, UserResponse
-from app.services.auth_service import AuthService
+from app.schemas.user import UserCreate, UserLogin, UserResponse, OAuthExchangeRequest
+from app.services.auth_service import AuthService, create_oauth_exchange_token, decode_token
+
+# Instantiate OAuth client once at module level
+oauth = OAuth()
+oauth.register(
+    name="github",
+    client_id=settings.github_client_id,
+    client_secret=settings.github_client_secret,
+    access_token_url="https://github.com/login/oauth/access_token",
+    authorize_url="https://github.com/login/oauth/authorize",
+    api_base_url="https://api.github.com/",
+    client_kwargs={"scope": "user:email"},
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -92,17 +105,6 @@ async def github_login(request: Request):
     Redirects to GitHub OAuth authorization page.
     The user will be asked to approve access to their email on GitHub.
     """
-    from authlib.integrations.starlette_client import OAuth
-    oauth = OAuth()
-    oauth.register(
-        name="github",
-        client_id=settings.github_client_id,
-        client_secret=settings.github_client_secret,
-        access_token_url="https://github.com/login/oauth/access_token",
-        authorize_url="https://github.com/login/oauth/authorize",
-        api_base_url="https://api.github.com/",
-        client_kwargs={"scope": "user:email"},
-    )
     redirect_uri = settings.github_redirect_uri
     return await oauth.github.authorize_redirect(request, redirect_uri)
 
@@ -110,28 +112,17 @@ async def github_login(request: Request):
 @router.get(
     "/github/callback",
     summary="GitHub OAuth callback",
-    description="Handles the redirect from GitHub after user approval. Returns a JWT via redirect.",
+    description="Handles the redirect from GitHub after user approval. Returns a short-lived exchange code.",
 )
 async def github_callback(request: Request, db: AsyncSession = Depends(get_db)):
     """
     GitHub redirects here after the user approves the OAuth app.
     We exchange the code for a token, fetch the user's profile,
-    then redirect the frontend with our JWT.
+    then redirect the frontend with a short-lived exchange code.
     """
-    from authlib.integrations.starlette_client import OAuth
     from fastapi import HTTPException
     import httpx
-
-    oauth = OAuth()
-    oauth.register(
-        name="github",
-        client_id=settings.github_client_id,
-        client_secret=settings.github_client_secret,
-        access_token_url="https://github.com/login/oauth/access_token",
-        authorize_url="https://github.com/login/oauth/authorize",
-        api_base_url="https://api.github.com/",
-        client_kwargs={"scope": "user:email"},
-    )
+    import uuid
 
     try:
         token = await oauth.github.authorize_access_token(request)
@@ -160,11 +151,25 @@ async def github_callback(request: Request, db: AsyncSession = Depends(get_db)):
     service = AuthService(db)
     jwt_tokens = await service.get_or_create_github_user(github_id=github_id, email=email)
 
-    # Redirect frontend with the tokens in query params
-    # Frontend's OAuthCallback.jsx reads these and saves to localStorage
-    redirect_url = (
-        f"{settings.frontend_url}/oauth/callback"
-        f"?access_token={jwt_tokens.access_token}"
-        f"&refresh_token={jwt_tokens.refresh_token}"
-    )
+    # Decode user ID from tokens and generate the one-time exchange token
+    payload = decode_token(jwt_tokens.access_token)
+    user_uuid = uuid.UUID(payload.sub)
+    exchange_code = create_oauth_exchange_token(user_uuid)
+
+    # Redirect frontend with exchange code
+    redirect_url = f"{settings.frontend_url}/oauth/callback?code={exchange_code}"
     return RedirectResponse(url=redirect_url)
+
+
+@router.post(
+    "/oauth/exchange",
+    response_model=Token,
+    summary="Exchange OAuth code for tokens",
+    description="Trade a short-lived exchange code for a full JWT access/refresh token pair.",
+)
+async def oauth_exchange(
+    data: OAuthExchangeRequest,
+    db: AsyncSession = Depends(get_db),
+) -> Token:
+    service = AuthService(db)
+    return await service.exchange_oauth_token(data.code)

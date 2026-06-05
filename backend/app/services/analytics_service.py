@@ -68,8 +68,7 @@ class AnalyticsService:
         Get aggregate analytics across ALL of a user's links.
         Returned by GET /api/v1/analytics/me
         """
-        total_links_result = await self.link_repo.get_user_links(user_id, page=1, page_size=1)
-        total_links = total_links_result[1]  # second element is total count
+        total_links = await self.link_repo.count_user_links(user_id)
 
         total_clicks = await self.click_repo.get_total_clicks_for_user(user_id)
         clicks_per_day = await self.click_repo.get_clicks_per_day_for_user(user_id)

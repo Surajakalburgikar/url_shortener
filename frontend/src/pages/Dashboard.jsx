@@ -22,10 +22,24 @@ const Dashboard = () => {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
   const [createSuccess, setCreateSuccess] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   // Selection state
   // null = Global/All Links, otherwise holds selected link object
-  const [selectedLink, setSelectedLink] = useState(null);
+  const [selectedLink, setSelectedLink] = useState(() => {
+    const stored = localStorage.getItem('selected_short_code');
+    return stored ? { short_code: stored } : null;
+  });
+
+  const handleSelectLink = (link) => {
+    if (link) {
+      setSelectedLink(link);
+      localStorage.setItem('selected_short_code', link.short_code);
+    } else {
+      setSelectedLink(null);
+      localStorage.removeItem('selected_short_code');
+    }
+  };
   
   // Analytics state
   const [analytics, setAnalytics] = useState(null);
@@ -41,7 +55,19 @@ const Dashboard = () => {
       const response = await api.get('/api/v1/links', {
         params: { page: 1, page_size: 100 },
       });
-      setLinks(response.data.items || []);
+      const fetchedLinks = response.data.items || [];
+      setLinks(fetchedLinks);
+      
+      const storedShortCode = localStorage.getItem('selected_short_code');
+      if (storedShortCode) {
+        const matchedLink = fetchedLinks.find(link => link.short_code === storedShortCode);
+        if (matchedLink) {
+          setSelectedLink(matchedLink);
+        } else {
+          localStorage.removeItem('selected_short_code');
+          setSelectedLink(null);
+        }
+      }
     } catch (err) {
       console.error('Failed to fetch links:', err);
     } finally {
@@ -169,18 +195,19 @@ const Dashboard = () => {
     }
   };
 
-  const handleDeleteLink = async (shortCode, e) => {
+  const handleDeleteLink = (shortCode, e) => {
     e.stopPropagation(); // Prevent selection trigger
-    if (!window.confirm(`Are you sure you want to delete /${shortCode}?`)) {
-      return;
-    }
+    setDeleteTarget(shortCode);
+  };
 
+  const confirmDeleteLink = async () => {
+    if (!deleteTarget) return;
     try {
-      await api.delete(`/api/v1/links/${shortCode}`);
+      await api.delete(`/api/v1/links/${deleteTarget}`);
       
       // If we deleted the currently selected link, reset selection
-      if (selectedLink?.short_code === shortCode) {
-        setSelectedLink(null);
+      if (selectedLink?.short_code === deleteTarget) {
+        handleSelectLink(null);
       }
       
       // Refresh list and analytics
@@ -188,6 +215,8 @@ const Dashboard = () => {
       fetchAnalytics();
     } catch (err) {
       alert(err.response?.data?.detail || 'Failed to delete link');
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -266,70 +295,22 @@ const Dashboard = () => {
                 </div>
                 <div className="form-group">
                   <label htmlFor="dash-expiry-date">Expiration Date (Optional)</label>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input
-                      id="dash-expiry-date"
-                      type="text"
-                      placeholder="YYYY-MM-DD"
-                      value={expiryDate}
-                      onChange={(e) => setExpiryDate(e.target.value)}
-                      style={{ flex: 1 }}
-                    />
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      style={{ padding: '0 0.75rem', display: 'flex', alignItems: 'center' }}
-                      onClick={() => {
-                        try { document.getElementById('dash-date-picker').showPicker(); } catch (e) {}
-                      }}
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                        <line x1="16" y1="2" x2="16" y2="6"></line>
-                        <line x1="8" y1="2" x2="8" y2="6"></line>
-                        <line x1="3" y1="10" x2="21" y2="10"></line>
-                      </svg>
-                    </button>
-                  </div>
                   <input
-                    id="dash-date-picker"
+                    id="dash-expiry-date"
                     type="date"
-                    style={{ position: 'absolute', width: 0, height: 0, opacity: 0, pointerEvents: 'none' }}
-                    onChange={(e) => { if (e.target.value) setExpiryDate(e.target.value); }}
+                    value={expiryDate}
+                    onChange={(e) => setExpiryDate(e.target.value)}
                   />
                 </div>
               </div>
 
               <div className="form-group" style={{ marginTop: '0.5rem' }}>
                 <label htmlFor="dash-expiry-time">Expiration Time (Optional)</label>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <input
-                    id="dash-expiry-time"
-                    type="text"
-                    placeholder="HH:MM (e.g. 14:30)"
-                    value={expiryTime}
-                    onChange={(e) => setExpiryTime(e.target.value)}
-                    style={{ flex: 1 }}
-                  />
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    style={{ padding: '0 0.75rem', display: 'flex', alignItems: 'center' }}
-                    onClick={() => {
-                      try { document.getElementById('dash-time-picker').showPicker(); } catch (e) {}
-                    }}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="10"></circle>
-                      <polyline points="12 6 12 12 16 14"></polyline>
-                    </svg>
-                  </button>
-                </div>
                 <input
-                  id="dash-time-picker"
+                  id="dash-expiry-time"
                   type="time"
-                  style={{ position: 'absolute', width: 0, height: 0, opacity: 0, pointerEvents: 'none' }}
-                  onChange={(e) => { if (e.target.value) setExpiryTime(e.target.value); }}
+                  value={expiryTime}
+                  onChange={(e) => setExpiryTime(e.target.value)}
                 />
               </div>
 
@@ -346,7 +327,7 @@ const Dashboard = () => {
               <button
                 className={`btn btn-secondary ${!selectedLink ? 'active' : ''}`}
                 style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
-                onClick={() => setSelectedLink(null)}
+                onClick={() => handleSelectLink(null)}
               >
                 Show All Analytics
               </button>
@@ -373,7 +354,7 @@ const Dashboard = () => {
                         borderColor: isSelected ? 'var(--primary)' : 'var(--border-color)',
                         backgroundColor: isSelected ? 'var(--bg-tertiary)' : 'var(--bg-secondary)',
                       }}
-                      onClick={() => setSelectedLink(link)}
+                      onClick={() => handleSelectLink(link)}
                     >
                       <div className="link-details">
                         <a
@@ -529,6 +510,55 @@ const Dashboard = () => {
         </div>
 
       </div>
+
+      {deleteTarget && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+        }}>
+          <div style={{
+            backgroundColor: '#0a0a0a',
+            border: '1px solid #1f1f1f',
+            borderRadius: '12px',
+            padding: '2rem',
+            width: '100%',
+            maxWidth: '440px',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+          }}>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: '600', color: '#ffffff', marginBottom: '0.75rem' }}>
+              Delete short URL?
+            </h3>
+            <p style={{ fontSize: '0.9rem', color: '#a3a3a3', marginBottom: '1.5rem', lineHeight: '1.5' }}>
+              Are you sure you want to delete <strong style={{ color: '#ffffff' }}>/{deleteTarget}</strong>? This action cannot be undone. All associated click analytics will be permanently erased.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setDeleteTarget(null)}
+                style={{ padding: '0.6rem 1.25rem', fontSize: '0.9rem' }}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-danger"
+                onClick={confirmDeleteLink}
+                style={{ padding: '0.6rem 1.25rem', fontSize: '0.9rem' }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

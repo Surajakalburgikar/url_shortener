@@ -78,6 +78,17 @@ def create_refresh_token(user_id: uuid.UUID) -> str:
     return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
 
 
+def create_oauth_exchange_token(user_id: uuid.UUID) -> str:
+    """Create a short-lived (60s) JWT exchange token to redeem for actual login tokens."""
+    expire = datetime.now(timezone.utc) + timedelta(seconds=60)
+    payload = {
+        "sub": str(user_id),
+        "type": "oauth_exchange",
+        "exp": expire,
+    }
+    return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
+
+
 def decode_token(token: str) -> TokenPayload:
     """
     Decode and validate a JWT token.
@@ -229,4 +240,32 @@ class AuthService:
             email=email,
             github_id=github_id,
         )
+        return create_token_pair(user.id)
+
+    async def exchange_oauth_token(self, exchange_token: str) -> Token:
+        """Exchange a valid short-lived oauth_exchange token for a full access + refresh token pair."""
+        from fastapi import HTTPException, status
+        from jose import JWTError
+
+        try:
+            payload = decode_token(exchange_token)
+        except JWTError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired exchange token",
+            )
+
+        if payload.type != "oauth_exchange":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token is not an exchange token",
+            )
+
+        user = await self.user_repo.get_by_id(uuid.UUID(payload.sub))
+        if not user or not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found or inactive",
+            )
+
         return create_token_pair(user.id)

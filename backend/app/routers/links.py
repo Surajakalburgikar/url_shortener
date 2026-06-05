@@ -125,10 +125,18 @@ async def _check_rate_limit(request: Request, user: User | None) -> None:
             key = f"ratelimit:links:anon:{client_ip}"
             limit = 5
 
-        # Increment counter and set 1-hour TTL if this is the first request
-        count = await redis_client.incr(key)
-        if count == 1:
-            await redis_client.expire(key, 3600)  # 1 hour window
+        # Atomic rate limiting using Lua script
+        lua_script = """
+        local key = KEYS[1]
+        local limit = tonumber(ARGV[1])
+        local ttl = tonumber(ARGV[2])
+        local val = redis.call('incr', key)
+        if val == 1 then
+            redis.call('expire', key, ttl)
+        end
+        return val
+        """
+        count = await redis_client.eval(lua_script, 1, key, limit, 3600)
 
         if count > limit:
             raise HTTPException(

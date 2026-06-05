@@ -15,7 +15,8 @@ from app.config import settings
 from app.database import Base, get_db
 from app.main import app
 
-# Ensure we are using the test database
+# Ensure we are using the test environment and test database
+settings.app_env = "testing"
 assert "test" in settings.test_database_url, "TEST_DATABASE_URL must point to a test database!"
 
 # Create engine for test database with NullPool

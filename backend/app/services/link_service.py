@@ -23,17 +23,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.link_repo import LinkRepository
 from app.schemas.link import LinkCreate, LinkListResponse, LinkResponse
 
-# ── Short code generation ─────────────────────────────────────────────────────
-
-# Characters used for random short codes
-# No 0/O or 1/l to avoid visual confusion (like a well-designed URL shortener)
-ALPHABET = string.ascii_letters + string.digits
+# Characters used for random short codes, excluding visually confusing ones:
+# 0 (zero), O (capital o), 1 (one), I (capital i), l (lowercase L)
+ALPHABET = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 SHORT_CODE_LENGTH = 6
 
 
 def generate_short_code() -> str:
-    """Generate a random 6-character alphanumeric short code."""
-    return "".join(random.choices(ALPHABET, k=SHORT_CODE_LENGTH))
+    """Generate a cryptographically secure random 6-character short code."""
+    import secrets
+    return "".join(secrets.choice(ALPHABET) for _ in range(SHORT_CODE_LENGTH))
 
 
 # ── URL safety validation ─────────────────────────────────────────────────────
@@ -194,12 +193,11 @@ class LinkService:
         page: int = 1,
         page_size: int = 20,
     ) -> LinkListResponse:
-        """List all links for a user with pagination and click counts."""
-        links, total = await self.link_repo.get_user_links(user_id, page, page_size)
+        """List all links for a user with pagination and click counts (optimized single query)."""
+        links_with_counts, total = await self.link_repo.get_user_links(user_id, page, page_size)
 
         items = []
-        for link in links:
-            count = await self.link_repo.get_click_count(link.id)
+        for link, count in links_with_counts:
             items.append(LinkResponse(
                 id=link.id,
                 short_code=link.short_code,

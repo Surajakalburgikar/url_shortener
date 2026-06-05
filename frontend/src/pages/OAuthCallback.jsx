@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import api from '../api/axios';
 
 const OAuthCallback = () => {
   const [searchParams] = useSearchParams();
@@ -9,15 +10,20 @@ const OAuthCallback = () => {
 
   useEffect(() => {
     const handleAuth = async () => {
-      const accessToken = searchParams.get('access_token');
-      const refreshToken = searchParams.get('refresh_token');
+      const code = searchParams.get('code');
 
-      if (accessToken && refreshToken) {
-        // Save tokens and load auth profile
-        await loginWithOAuth(accessToken, refreshToken);
-        navigate('/dashboard', { replace: true });
+      if (code) {
+        try {
+          const response = await api.post('/api/v1/auth/oauth/exchange', { code });
+          const { access_token, refresh_token } = response.data;
+          await loginWithOAuth(access_token, refresh_token);
+          navigate('/dashboard', { replace: true });
+        } catch (err) {
+          console.error('OAuth exchange failed:', err);
+          navigate('/login', { replace: true });
+        }
       } else {
-        // If tokens are missing, redirect to login
+        // If code is missing, redirect to login
         navigate('/login', { replace: true });
       }
     };

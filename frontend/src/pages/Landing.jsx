@@ -169,69 +169,21 @@ const Landing = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', gridColumn: 'span 2' }}>
                   <div className="form-group">
                     <label htmlFor="expiry-date">Expiration Date (Optional)</label>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <input
-                        id="expiry-date"
-                        type="text"
-                        placeholder="YYYY-MM-DD (e.g. 2026-12-31)"
-                        value={expiryDate}
-                        onChange={(e) => setExpiryDate(e.target.value)}
-                        style={{ flex: 1 }}
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        style={{ padding: '0 0.75rem', display: 'flex', alignItems: 'center' }}
-                        onClick={() => {
-                          try { document.getElementById('landing-date-picker').showPicker(); } catch (e) {}
-                        }}
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                          <line x1="16" y1="2" x2="16" y2="6"></line>
-                          <line x1="8" y1="2" x2="8" y2="6"></line>
-                          <line x1="3" y1="10" x2="21" y2="10"></line>
-                        </svg>
-                      </button>
-                    </div>
                     <input
-                      id="landing-date-picker"
+                      id="expiry-date"
                       type="date"
-                      style={{ position: 'absolute', width: 0, height: 0, opacity: 0, pointerEvents: 'none' }}
-                      onChange={(e) => { if (e.target.value) setExpiryDate(e.target.value); }}
+                      value={expiryDate}
+                      onChange={(e) => setExpiryDate(e.target.value)}
                     />
                   </div>
 
                   <div className="form-group">
                     <label htmlFor="expiry-time">Expiration Time (Optional)</label>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <input
-                        id="expiry-time"
-                        type="text"
-                        placeholder="HH:MM (e.g. 14:30)"
-                        value={expiryTime}
-                        onChange={(e) => setExpiryTime(e.target.value)}
-                        style={{ flex: 1 }}
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        style={{ padding: '0 0.75rem', display: 'flex', alignItems: 'center' }}
-                        onClick={() => {
-                          try { document.getElementById('landing-time-picker').showPicker(); } catch (e) {}
-                        }}
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="12" cy="12" r="10"></circle>
-                          <polyline points="12 6 12 12 16 14"></polyline>
-                        </svg>
-                      </button>
-                    </div>
                     <input
-                      id="landing-time-picker"
+                      id="expiry-time"
                       type="time"
-                      style={{ position: 'absolute', width: 0, height: 0, opacity: 0, pointerEvents: 'none' }}
-                      onChange={(e) => { if (e.target.value) setExpiryTime(e.target.value); }}
+                      value={expiryTime}
+                      onChange={(e) => setExpiryTime(e.target.value)}
                     />
                   </div>
                 </div>

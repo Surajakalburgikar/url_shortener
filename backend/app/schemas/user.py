@@ -19,7 +19,12 @@ from pydantic import BaseModel, EmailStr, Field, model_validator
 class UserCreate(BaseModel):
     """Request body for POST /api/v1/auth/register"""
     email: EmailStr                         # Validates real email format (e.g. rejects "notanemail")
-    password: str = Field(min_length=8)    # Enforce minimum password length at schema level
+    password: str = Field(min_length=8, max_length=128)    # Enforce password length at schema level
+
+
+class OAuthExchangeRequest(BaseModel):
+    """Request body for POST /api/v1/auth/oauth/exchange"""
+    code: str
 
     model_config = {
         "json_schema_extra": {

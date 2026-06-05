@@ -18,16 +18,36 @@ Why 307 (Temporary Redirect) instead of 301 (Permanent)?
 """
 
 import uuid
+import structlog
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import AsyncSessionLocal, get_db
 from app.repositories.click_repo import ClickRepository
 from app.services.link_service import LinkService
 
 router = APIRouter(tags=["redirect"])
+log = structlog.get_logger()
+
+
+async def resolve_country_from_ip(ip: str | None) -> str | None:
+    """Resolve IP address to 2-letter country code via ip2c.org."""
+    if not ip or ip in ("127.0.0.1", "::1", "localhost") or ip.startswith("192.168.") or ip.startswith("10."):
+        return "LO"
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=1.0) as client:
+            resp = await client.get(f"http://ip2c.org/{ip}")
+            if resp.status_code == 200:
+                parts = resp.text.split(";")
+                if len(parts) >= 4 and parts[0] == "1":
+                    return parts[1]
+    except Exception as e:
+        log.warning("ip_lookup_failed", ip=ip, error=str(e))
+    return "ZZ"
 
 
 async def record_click(
@@ -60,24 +80,17 @@ async def record_click(
         except Exception:
             pass
 
-    # Country detection from IP (simple approach — no external API needed)
-    # In a real system, you'd use a MaxMind GeoIP database here
-    country = None  # We'll leave this as None for now — can be enhanced later
+    # Country detection from IP via ip2c.org
+    country = await resolve_country_from_ip(client_ip)
 
-    # If the request session is closed (production), create a fresh one.
-    # If it is open/active (tests), reuse it to participate in the test transaction.
-    session_to_use = db
-    is_external_session = False
-    
-    if db:
-        try:
-            if db.is_active:
-                is_external_session = True
-        except Exception:
-            pass
-
-    if not is_external_session:
+    # If we are running tests, reuse the transaction session to keep database isolation intact.
+    # Otherwise, allocate a fresh database session for the background thread.
+    if settings.is_testing and db:
+        session_to_use = db
+        is_external_session = True
+    else:
         session_to_use = AsyncSessionLocal()
+        is_external_session = False
 
     try:
         click_repo = ClickRepository(session_to_use)
@@ -90,8 +103,7 @@ async def record_click(
         )
         await session_to_use.commit()
     except Exception as e:
-        import logging
-        logging.getLogger("uvicorn.error").error(f"Failed to record click: {e}")
+        log.error("click_recording_failed", error=str(e), link_id=str(link_id))
         await session_to_use.rollback()
     finally:
         if not is_external_session:
