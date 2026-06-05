@@ -46,3 +46,7 @@ frontend/.env.local
 # Logs
 *.log
 
+# GeoIP Databases
+backend/GeoLite2-Country.mmdb
+*.mmdb
+

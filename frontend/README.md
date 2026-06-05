@@ -6,7 +6,7 @@ This is the React SPA frontend client for the **URL Shortener & Analytics Platfo
 
 ## 🎨 Highlights & Layouts
 - **Minimalist Slate Theme**: Uses custom CSS variables inside `src/index.css` for a flat dark slate layout without glowing borders or purple gradients.
-- **JWT Session Persistence**: Axios client automatically stores, attaches, and refreshes access/refresh tokens.
+- **Secure Cookie Auth**: Tokens are stored in httpOnly cookies set by the backend — never in localStorage. Axios sends cookies automatically on every request via `withCredentials: true`.
 - **Interactive Dashboard Charts**: Leverages `Recharts` to display click frequency over the last 30 days, geographic tracking, and referrer origins.
 - **Advanced Parameters**: Supports custom alias creation and custom expiration datetimes.
 - **Responsive Layout**: Designed to render elegantly on all device screens.
