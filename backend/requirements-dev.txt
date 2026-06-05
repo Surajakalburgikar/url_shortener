@@ -1,0 +1,12 @@
+# ── Developer tooling — NOT installed in production (Render uses requirements.txt only) ──
+
+# Linting & formatting
+ruff==0.8.2         # Fast Python linter
+black==24.10.0      # Auto-formatter
+mypy==1.13.0        # Static type checker
+
+# Git hooks
+pre-commit==4.0.1   # Runs checks before every git commit
+
+# Load testing
+locust==2.32.2      # Simulates hundreds of concurrent users

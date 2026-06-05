@@ -18,6 +18,8 @@ const Landing = () => {
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
 
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -42,8 +44,6 @@ const Landing = () => {
       };
 
       const response = await api.post('/api/v1/links', payload);
-      
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
       setShortUrl(`${apiBaseUrl}/${response.data.short_code}`);
     } catch (err) {
       console.error(err);

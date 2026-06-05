@@ -10,6 +10,7 @@ we configure everything here and export the app object.
 Startup/shutdown lifecycle:
 - On startup: connect to Redis, configure structlog
 - On shutdown: close Redis connection
+  (GeoIP uses a local .mmdb file via geoip2 — no HTTP client to close)
 
 The order middleware is added MATTERS — they execute in reverse order:
 1. SecurityHeaders (outermost — runs last on response, first to receive request)
