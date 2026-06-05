@@ -83,6 +83,33 @@ async def list_links(
     )
 
 
+@router.get(
+    "/rate-limit",
+    summary="Get current rate limit usage",
+    description="Returns the authenticated user's current hourly link-creation count and limit.",
+)
+async def get_rate_limit_usage(
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Read the user's rate-limit counter from Redis."""
+    from app.main import redis_client
+    if not redis_client:
+        return {"used": 0, "limit": 50, "resets_in_seconds": 3600}
+
+    key = f"ratelimit:links:user:{current_user.id}"
+    try:
+        count = await redis_client.get(key)
+        ttl = await redis_client.ttl(key)
+        used = int(count) if count else 0
+        return {
+            "used": used,
+            "limit": 50,
+            "resets_in_seconds": ttl if ttl > 0 else 3600,
+        }
+    except Exception:
+        return {"used": 0, "limit": 50, "resets_in_seconds": 3600}
+
+
 @router.delete(
     "/{short_code}",
     status_code=status.HTTP_204_NO_CONTENT,

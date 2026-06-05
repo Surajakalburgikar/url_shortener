@@ -8,6 +8,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
+import { QRCodeSVG } from 'qrcode.react';
 import api from '../api/axios';
 import { parseExpiryDateTime } from '../utils/parseExpiry';
 import { useAuth } from '../context/AuthContext';
@@ -43,7 +44,8 @@ const Dashboard = () => {
   const [createError, setCreateError] = useState('');
   const [createSuccess, setCreateSuccess] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [deleteError, setDeleteError] = useState('');
+  // Rate limit state (fetched from backend)
+  const [rateLimitData, setRateLimitData] = useState(null);
   const [copiedCode, setCopiedCode] = useState(null);
 
   // Pagination state
@@ -137,6 +139,16 @@ const Dashboard = () => {
     }
   }, [selectedLink]);
 
+  // Fetch real rate limit usage from backend
+  const fetchRateLimit = useCallback(async () => {
+    try {
+      const res = await api.get('/api/v1/links/rate-limit');
+      setRateLimitData(res.data);
+    } catch {
+      // silently fail — not critical
+    }
+  }, []);
+
   useEffect(() => {
     document.title = "Dashboard — Brief.ly";
   }, []);
@@ -145,9 +157,24 @@ const Dashboard = () => {
     fetchLinks(page);
   }, [page]);
 
+  // Initial analytics fetch + 30-second polling
   useEffect(() => {
     fetchAnalytics();
+    const interval = setInterval(fetchAnalytics, 30000);
+    return () => clearInterval(interval);
   }, [selectedLink, fetchAnalytics]);
+
+  // Refresh analytics when user switches to the analytics tab
+  useEffect(() => {
+    if (currentTab === 'analytics') {
+      fetchAnalytics();
+    }
+  }, [currentTab]);
+
+  // Fetch rate limit on mount + refresh after creating a link
+  useEffect(() => {
+    fetchRateLimit();
+  }, [fetchRateLimit]);
 
   const handleCreateLink = async (e) => {
     e.preventDefault();
@@ -187,6 +214,7 @@ const Dashboard = () => {
       // Refresh list and analytics
       fetchLinks(page);
       fetchAnalytics();
+      fetchRateLimit();
     } catch (err) {
       const msg = err.response?.data?.detail || 'Failed to create link';
       setCreateError(msg);
@@ -213,7 +241,6 @@ const Dashboard = () => {
 
   const confirmDeleteLink = async () => {
     if (!deleteTarget) return;
-    setDeleteError('');
     try {
       await api.delete(`/api/v1/links/${deleteTarget}`);
       addToast(`Link /${deleteTarget} deleted successfully`, 'success');
@@ -228,9 +255,9 @@ const Dashboard = () => {
       setPage(newPage);
       fetchLinks(newPage);
       fetchAnalytics();
+      fetchRateLimit();
     } catch (err) {
       const msg = err.response?.data?.detail || 'Failed to delete link';
-      setDeleteError(msg);
       addToast(msg, 'danger');
     } finally {
       setDeleteTarget(null);
@@ -588,32 +615,43 @@ const Dashboard = () => {
         <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1.5rem' }}>
           <div>
             <span className="small-label" style={{ display: 'block', marginBottom: '0.25rem' }}>Member Since</span>
-            <div style={{ fontSize: '0.95rem', color: 'var(--text-heading)' }}>June 2026</div>
+            <div style={{ fontSize: '0.95rem', color: 'var(--text-heading)' }}>
+              {user?.created_at
+                ? new Date(user.created_at).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+                : 'N/A'}
+            </div>
           </div>
         </div>
       </div>
 
       <div className="card">
-        <h3 className="mb-6" style={{ fontSize: '1.25rem', fontWeight: '500' }}>Usage Metrics</h3>
-        <div style={{ marginBottom: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
-            <span>Monthly Redirect Limit</span>
-            <span style={{ color: 'var(--gold-accent)', fontWeight: '500' }}>74,210 / 100,000</span>
+        <h3 className="mb-6" style={{ fontSize: '1.25rem', fontWeight: '500' }}>Link Creation Usage</h3>
+        {rateLimitData ? (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+              <span>Hourly Link Creation</span>
+              <span style={{ color: 'var(--gold-accent)', fontWeight: '500' }}>
+                {rateLimitData.used} / {rateLimitData.limit} per hour
+              </span>
+            </div>
+            <div style={{ height: '6px', backgroundColor: 'var(--bg-primary)', borderRadius: '3px', overflow: 'hidden' }}>
+              <div style={{
+                width: `${Math.min((rateLimitData.used / rateLimitData.limit) * 100, 100)}%`,
+                height: '100%',
+                background: 'linear-gradient(90deg, var(--gold-dark), var(--gold-accent))',
+                borderRadius: '3px'
+              }}></div>
+            </div>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+              Resets in {Math.ceil(rateLimitData.resets_in_seconds / 60)} minutes
+            </p>
           </div>
-          <div style={{ height: '6px', backgroundColor: 'var(--bg-primary)', borderRadius: '3px', overflow: 'hidden' }}>
-            <div style={{ width: '74.2%', height: '100%', background: 'linear-gradient(90deg, var(--gold-dark), var(--gold-accent))', borderRadius: '3px' }}></div>
+        ) : (
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            <p>Up to 50 link creations per hour.</p>
+            <p style={{ marginTop: '0.35rem' }}>{totalLinks} active link{totalLinks !== 1 ? 's' : ''} in your account.</p>
           </div>
-        </div>
-
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
-            <span>Rate Limit Usage</span>
-            <span style={{ color: 'var(--gold-accent)', fontWeight: '500' }}>12 / 50 per hour</span>
-          </div>
-          <div style={{ height: '6px', backgroundColor: 'var(--bg-primary)', borderRadius: '3px', overflow: 'hidden' }}>
-            <div style={{ width: '24%', height: '100%', background: 'linear-gradient(90deg, var(--gold-dark), var(--gold-accent))', borderRadius: '3px' }}></div>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -770,7 +808,7 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* QR Code Modal */}
+      {/* QR Code Modal — generated locally via qrcode.react, no external API */}
       {qrTarget && (
         <div className="modal-overlay" onClick={() => setQrTarget(null)}>
           <div className="modal-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px', textAlign: 'center' }}>
@@ -786,10 +824,12 @@ const Dashboard = () => {
               marginBottom: '1.5rem',
               boxShadow: 'inset 0 0 10px rgba(0,0,0,0.8)'
             }}>
-              <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`${apiBaseUrl}/${qrTarget}`)}&color=d4af37&bgcolor=0b0b0b`}
-                alt={`QR Code for ${qrTarget}`}
-                style={{ display: 'block', borderRadius: '4px' }}
+              <QRCodeSVG
+                id="qr-code-svg"
+                value={`${apiBaseUrl}/${qrTarget}`}
+                size={200}
+                fgColor="#D4AF37"
+                bgColor="#0B0B0B"
               />
             </div>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-body)', marginBottom: '1.5rem', wordBreak: 'break-all' }}>
@@ -807,27 +847,24 @@ const Dashboard = () => {
               <button
                 className="btn btn-primary"
                 onClick={() => {
-                  const shortUrl = `${apiBaseUrl}/${qrTarget}`;
-                  const url = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(shortUrl)}&color=d4af37&bgcolor=0b0b0b`;
-                  fetch(url)
-                    .then(response => response.blob())
-                    .then(blob => {
-                      const link = document.createElement('a');
-                      link.href = URL.createObjectURL(blob);
-                      link.download = `qrcode-${qrTarget}.png`;
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
-                      addToast("QR Code download started!", "success");
-                    })
-                    .catch(err => {
-                      console.error('Failed to download QR code', err);
-                      addToast("Failed to download QR code.", "danger");
-                    });
+                  const svgEl = document.getElementById('qr-code-svg');
+                  if (!svgEl) return;
+                  const serializer = new XMLSerializer();
+                  const svgStr = serializer.serializeToString(svgEl);
+                  const blob = new Blob([svgStr], { type: 'image/svg+xml' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `qrcode-${qrTarget}.svg`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                  addToast('QR Code downloaded!', 'success');
                 }}
                 style={{ flex: 1, padding: '0.6rem 1.25rem', fontSize: '0.9rem' }}
               >
-                Download
+                Download SVG
               </button>
             </div>
           </div>
