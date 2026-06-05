@@ -10,21 +10,16 @@ const api = axios.create({
   withCredentials: true,
 });
 
-// Interceptor to attach access token to requests (handled by cookies, left as pass-through)
 api.interceptors.request.use(
-  (config) => {
-    return config;
-  },
+  (config) => config,
   (error) => Promise.reject(error)
 );
 
-// Interceptor to handle token refresh on 401 response
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    
-    // Check if the error is 401, we haven't retried yet, and it's not the refresh or me endpoint
+
     if (
       error.response?.status === 401 &&
       originalRequest &&
@@ -33,20 +28,20 @@ api.interceptors.response.use(
       !originalRequest.url?.includes('/auth/me')
     ) {
       originalRequest._retry = true;
-      
+
       try {
-        // null body -> FastAPI reads refresh_token from httpOnly cookie
-        await axios.post(`${API_BASE_URL}/api/v1/auth/refresh`, null, { withCredentials: true });
-        
-        // Retry the original request (new cookies will be automatically attached)
+        await axios.post(
+          `${API_BASE_URL}/api/v1/auth/refresh`,
+          null,
+          { withCredentials: true }
+        );
         return api(originalRequest);
       } catch (refreshError) {
-        // If refresh fails, redirect to login
         window.location.href = '/login';
         return Promise.reject(refreshError);
       }
     }
-    
+
     return Promise.reject(error);
   }
 );
