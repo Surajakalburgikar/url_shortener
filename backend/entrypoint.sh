@@ -28,8 +28,7 @@ echo "Running database migrations..."
 alembic upgrade head
 echo "Database migrations completed successfully!"
 
-# Start FastAPI application using Uvicorn
-# --workers 4: standard worker count for containerized environment
-# --proxy-headers: tells uvicorn to trust X-Forwarded-For headers from Nginx/ALB
-echo "Starting Uvicorn server..."
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --workers 4
+# Use environment-aware worker count, defaulting to 1 (safe for memory/free tiers)
+WORKERS=${WORKERS:-1}
+echo "Starting Uvicorn server with $WORKERS workers..."
+exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --workers $WORKERS

@@ -31,12 +31,7 @@ const Dashboard = () => {
   const [totalLinks, setTotalLinks] = useState(0);
   const PAGE_SIZE = 10;
 
-  // Selection state
-  // null = Global/All Links, otherwise holds selected link object
-  const [selectedLink, setSelectedLink] = useState(() => {
-    const stored = localStorage.getItem('selected_short_code');
-    return stored ? { short_code: stored } : null;
-  });
+  const [selectedLink, setSelectedLink] = useState(null);
 
   const handleSelectLink = (link) => {
     if (link) {
@@ -94,15 +89,26 @@ const Dashboard = () => {
       setAnalytics(response.data);
     } catch (err) {
       console.error('Failed to fetch analytics:', err);
-      setAnalyticsError('Could not load analytics data.');
+      if (selectedLink && (err.response?.status === 404 || err.response?.status === 403)) {
+        setAnalyticsError('Selected link no longer exists. Returning to global analytics view.');
+        setTimeout(() => {
+          handleSelectLink(null);
+        }, 3000);
+      } else {
+        setAnalyticsError('Could not load analytics data.');
+      }
     } finally {
       setLoadingAnalytics(false);
     }
   }, [selectedLink]);
 
   useEffect(() => {
+    document.title = "Dashboard — Brief.ly";
+  }, []);
+
+  useEffect(() => {
     fetchLinks(page);
-  }, [page, fetchLinks]);
+  }, [page]);
 
   useEffect(() => {
     fetchAnalytics();
@@ -166,7 +172,9 @@ const Dashboard = () => {
       }
       
       // Refresh list and analytics
-      fetchLinks(page);
+      const newPage = (links.length === 1 && page > 1) ? page - 1 : page;
+      setPage(newPage);
+      fetchLinks(newPage);
       fetchAnalytics();
     } catch (err) {
       setDeleteError(err.response?.data?.detail || 'Failed to delete link');

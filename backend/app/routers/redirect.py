@@ -21,7 +21,7 @@ import uuid
 import structlog
 import httpx
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, Path
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -124,9 +124,9 @@ async def record_click(
     status_code=307,
 )
 async def redirect_to_url(
-    short_code: str,
     request: Request,
     background_tasks: BackgroundTasks,
+    short_code: str = Path(..., min_length=1, max_length=50, pattern="^[a-zA-Z0-9_-]+$"),
     db: AsyncSession = Depends(get_db),
 ) -> RedirectResponse:
     """

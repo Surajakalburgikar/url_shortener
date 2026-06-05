@@ -49,13 +49,11 @@ class AnalyticsService:
                 detail="You don't have permission to view analytics for this link",
             )
 
-        # Run all queries concurrently using asyncio.gather for better performance
-        total_clicks, clicks_per_day, top_referrers, top_countries = await asyncio.gather(
-            self.click_repo.get_total_clicks_for_link(link.id),
-            self.click_repo.get_clicks_per_day(link.id),
-            self.click_repo.get_top_referrers(link.id),
-            self.click_repo.get_top_countries(link.id),
-        )
+        # Execute queries sequentially because SQLAlchemy AsyncSession is not concurrency-safe
+        total_clicks = await self.click_repo.get_total_clicks_for_link(link.id)
+        clicks_per_day = await self.click_repo.get_clicks_per_day(link.id)
+        top_referrers = await self.click_repo.get_top_referrers(link.id)
+        top_countries = await self.click_repo.get_top_countries(link.id)
 
         return LinkAnalyticsResponse(
             short_code=link.short_code,
@@ -73,13 +71,11 @@ class AnalyticsService:
         """
         total_links = await self.link_repo.count_user_links(user_id)
 
-        # Run all queries concurrently using asyncio.gather for better performance
-        total_clicks, clicks_per_day, top_referrers, top_countries = await asyncio.gather(
-            self.click_repo.get_total_clicks_for_user(user_id),
-            self.click_repo.get_clicks_per_day_for_user(user_id),
-            self.click_repo.get_top_referrers_for_user(user_id),
-            self.click_repo.get_top_countries_for_user(user_id),
-        )
+        # Execute queries sequentially because SQLAlchemy AsyncSession is not concurrency-safe
+        total_clicks = await self.click_repo.get_total_clicks_for_user(user_id)
+        clicks_per_day = await self.click_repo.get_clicks_per_day_for_user(user_id)
+        top_referrers = await self.click_repo.get_top_referrers_for_user(user_id)
+        top_countries = await self.click_repo.get_top_countries_for_user(user_id)
 
         return UserAnalyticsResponse(
             total_links=total_links,

@@ -14,7 +14,7 @@ How it works:
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import AnyHttpUrl, Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -88,14 +88,14 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_docs_auth(self) -> "Settings":
-        if self.app_env == "production":
+        if self.app_env != "development":
             if self.docs_username == "admin" or self.docs_password == "admin":
                 raise ValueError(
-                    "docs_username and docs_password must be changed in production. "
+                    "docs_username and docs_password must be changed in non-development environments. "
                     "Cannot use default 'admin' credentials."
                 )
             if len(self.docs_password) < 12:
-                raise ValueError("docs_password must be at least 12 characters in production.")
+                raise ValueError("docs_password must be at least 12 characters in non-development environments.")
         return self
 
 

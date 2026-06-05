@@ -15,7 +15,7 @@ Dependency chain for a protected endpoint:
 
 import uuid
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,13 +32,14 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     """
     Dependency for protected endpoints.
     
-    Extracts JWT from Authorization header, validates it, and returns the User object.
+    Extracts JWT from Authorization header or access_token cookie, validates it, and returns the User object.
     Raises 401 if token is missing, expired, or invalid.
     
     Usage:
@@ -46,15 +47,21 @@ async def get_current_user(
         async def get_me(user: User = Depends(get_current_user)):
             return user
     """
-    if not credentials:
+    token = None
+    if credentials:
+        token = credentials.credentials
+    else:
+        token = request.cookies.get("access_token")
+
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated — provide a Bearer token",
+            detail="Not authenticated — provide a Bearer token or session cookie",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     try:
-        payload = decode_token(credentials.credentials)
+        payload = decode_token(token)
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -87,6 +94,7 @@ async def get_current_user(
 
 
 async def get_optional_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User | None:
@@ -99,11 +107,17 @@ async def get_optional_user(
     
     Used by: POST /api/v1/links (anonymous can create links, logged-in users get ownership)
     """
-    if not credentials:
+    token = None
+    if credentials:
+        token = credentials.credentials
+    else:
+        token = request.cookies.get("access_token")
+
+    if not token:
         return None  # Anonymous — that's fine
 
     try:
-        payload = decode_token(credentials.credentials)
+        payload = decode_token(token)
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

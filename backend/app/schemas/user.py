@@ -30,8 +30,7 @@ class OAuthExchangeRequest(BaseModel):
         "json_schema_extra": {
             "examples": [
                 {
-                    "email": "user@example.com",
-                    "password": "securepassword123"
+                    "code": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.oauth_code_example..."
                 }
             ]
         }
@@ -65,7 +64,6 @@ class UserResponse(BaseModel):
     """
     id: uuid.UUID
     email: str
-    github_id: str | None = None
     is_active: bool
     created_at: datetime
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -11,13 +11,17 @@ const Register = () => {
   const { register } = useAuth();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    document.title = "Sign Up — Brief.ly";
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters long.');
+    if (password.length < 8 || password.length > 128) {
+      setError('Password must be between 8 and 128 characters.');
       setLoading(false);
       return;
     }
@@ -58,6 +62,7 @@ const Register = () => {
               id="email"
               type="email"
               required
+              autoComplete="email"
               placeholder="name@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -70,6 +75,7 @@ const Register = () => {
               id="password"
               type="password"
               required
+              autoComplete="new-password"
               placeholder="Min. 8 characters"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -82,6 +88,7 @@ const Register = () => {
               id="confirmPassword"
               type="password"
               required
+              autoComplete="new-password"
               placeholder="Re-enter password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}

@@ -7,21 +7,12 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch the current user profile using the access token
+  // Fetch the current user profile
   const checkAuth = async () => {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      setUser(null);
-      setLoading(false);
-      return;
-    }
-    
     try {
       const response = await api.get('/api/v1/auth/me');
       setUser(response.data);
     } catch (error) {
-      console.error('Failed to fetch user profile:', error);
-      // Let axios interceptor handle token failure or redirect
       setUser(null);
     } finally {
       setLoading(false);
@@ -46,13 +37,9 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     setLoading(true);
     try {
-      const response = await api.post('/api/v1/auth/login', { email, password });
-      const { access_token, refresh_token } = response.data;
+      await api.post('/api/v1/auth/login', { email, password });
       
-      localStorage.setItem('access_token', access_token);
-      localStorage.setItem('refresh_token', refresh_token);
-      
-      // Fetch user profile immediately
+      // Fetch user profile immediately (cookies set automatically by backend)
       const profileResponse = await api.get('/api/v1/auth/me');
       setUser(profileResponse.data);
       return profileResponse.data;
@@ -66,13 +53,9 @@ export const AuthProvider = ({ children }) => {
   const register = async (email, password) => {
     setLoading(true);
     try {
-      const response = await api.post('/api/v1/auth/register', { email, password });
-      const { access_token, refresh_token } = response.data;
+      await api.post('/api/v1/auth/register', { email, password });
       
-      localStorage.setItem('access_token', access_token);
-      localStorage.setItem('refresh_token', refresh_token);
-      
-      // Fetch user profile immediately
+      // Fetch user profile immediately (cookies set automatically by backend)
       const profileResponse = await api.get('/api/v1/auth/me');
       setUser(profileResponse.data);
       return profileResponse.data;
@@ -83,18 +66,24 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    setUser(null);
+  const logout = async () => {
+    try {
+      await api.post('/api/v1/auth/logout');
+    } catch (error) {
+      console.error('Logout request failed:', error);
+    } finally {
+      setUser(null);
+    }
   };
 
-  const loginWithOAuth = async (accessToken, refreshToken) => {
+  const loginWithOAuth = async () => {
     setLoading(true);
-    localStorage.setItem('access_token', accessToken);
-    localStorage.setItem('refresh_token', refreshToken);
-    // Reload auth state
-    await checkAuth();
+    try {
+      // Reload auth state (cookies set automatically by backend)
+      await checkAuth();
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

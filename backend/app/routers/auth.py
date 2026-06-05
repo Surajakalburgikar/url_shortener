@@ -16,7 +16,8 @@ GitHub OAuth flow (how it works):
 8. We redirect the frontend to /?token=<jwt> so it can save the token
 """
 
-from fastapi import APIRouter, Depends, Request, status
+
+from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from authlib.integrations.starlette_client import OAuth
@@ -44,6 +45,27 @@ oauth.register(
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _set_auth_cookies(response: Response, access_token: str, refresh_token: str | None) -> None:
+    samesite = "none" if settings.app_env == "production" else "lax"
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        samesite=samesite,
+        secure=True,
+        max_age=1800,  # 30 minutes
+    )
+    if refresh_token:
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            samesite=samesite,
+            secure=True,
+            max_age=7 * 24 * 3600,  # 7 days
+        )
+
+
 @router.post(
     "/register",
     response_model=Token,
@@ -51,9 +73,17 @@ router = APIRouter(prefix="/auth", tags=["auth"])
     summary="Register with email and password",
     description="Creates a new account and returns JWT access + refresh tokens. User is immediately logged in.",
 )
-async def register(data: UserCreate, db: AsyncSession = Depends(get_db)) -> Token:
+async def register(
+    request: Request,
+    response: Response,
+    data: UserCreate,
+    db: AsyncSession = Depends(get_db)
+) -> Token:
+    await _check_register_rate_limit(request)
     service = AuthService(db)
-    return await service.register(data)
+    tokens = await service.register(data)
+    _set_auth_cookies(response, tokens.access_token, tokens.refresh_token)
+    return tokens
 
 
 @router.post(
@@ -64,12 +94,15 @@ async def register(data: UserCreate, db: AsyncSession = Depends(get_db)) -> Toke
 )
 async def login(
     request: Request,
+    response: Response,
     data: UserLogin,
     db: AsyncSession = Depends(get_db),
 ) -> Token:
     await _check_login_rate_limit(request)
     service = AuthService(db)
-    return await service.login(data.email, data.password)
+    tokens = await service.login(data.email, data.password)
+    _set_auth_cookies(response, tokens.access_token, tokens.refresh_token)
+    return tokens
 
 
 @router.post(
@@ -79,12 +112,28 @@ async def login(
     description="Exchange a valid refresh token for a new access token. Refresh token itself is not rotated.",
 )
 async def refresh_token(
-    data: RefreshTokenRequest,
+    request: Request,
+    response: Response,
+    data: RefreshTokenRequest | None = None,
     db: AsyncSession = Depends(get_db),
 ) -> AccessToken:
-    """Body: {"refresh_token": "eyJ..."}"""
+    """Gets token from cookie if body is missing."""
+    ref_token = None
+    if data and data.refresh_token:
+        ref_token = data.refresh_token
+    else:
+        ref_token = request.cookies.get("refresh_token")
+
+    if not ref_token:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token is missing",
+        )
+
     service = AuthService(db)
-    new_access_token = await service.refresh_access_token(data.refresh_token)
+    new_access_token = await service.refresh_access_token(ref_token)
+    _set_auth_cookies(response, new_access_token, None)
     return AccessToken(access_token=new_access_token)
 
 
@@ -134,8 +183,8 @@ async def github_callback(request: Request, db: AsyncSession = Depends(get_db)):
     except Exception:
         raise HTTPException(status_code=400, detail="GitHub OAuth failed — invalid or expired code")
 
-    # Fetch GitHub user profile
-    async with httpx.AsyncClient() as client:
+    # Fetch GitHub user profile with a 10-second timeout
+    async with httpx.AsyncClient(timeout=10.0) as client:
         headers = {"Authorization": f"Bearer {token['access_token']}"}
         user_resp = await client.get("https://api.github.com/user", headers=headers)
         emails_resp = await client.get("https://api.github.com/user/emails", headers=headers)
@@ -173,11 +222,26 @@ async def github_callback(request: Request, db: AsyncSession = Depends(get_db)):
     description="Trade a short-lived exchange code for a full JWT access/refresh token pair.",
 )
 async def oauth_exchange(
+    response: Response,
     data: OAuthExchangeRequest,
     db: AsyncSession = Depends(get_db),
 ) -> Token:
     service = AuthService(db)
-    return await service.exchange_oauth_token(data.code)
+    tokens = await service.exchange_oauth_token(data.code)
+    _set_auth_cookies(response, tokens.access_token, tokens.refresh_token)
+    return tokens
+
+
+@router.post(
+    "/logout",
+    summary="Logout user",
+    description="Clears authentication cookies.",
+)
+async def logout(response: Response):
+    samesite = "none" if settings.app_env == "production" else "lax"
+    response.delete_cookie("access_token", samesite=samesite, secure=True)
+    response.delete_cookie("refresh_token", samesite=samesite, secure=True)
+    return {"detail": "Logged out successfully"}
 
 
 async def _check_login_rate_limit(request: Request) -> None:
@@ -220,4 +284,47 @@ async def _check_login_rate_limit(request: Request) -> None:
         import structlog
         log = structlog.get_logger()
         log.warning("ratelimit.login_redis_error", error=str(e))
+        return  # Fail open
+
+
+async def _check_register_rate_limit(request: Request) -> None:
+    """Limit registration attempts by IP to prevent account creation spam."""
+    from fastapi import HTTPException
+    from app.main import redis_client
+    if not redis_client:
+        return
+
+    try:
+        client_ip = request.client.host if request.client else "unknown"
+        key = f"ratelimit:register:{client_ip}"
+        limit = 5
+        ttl = 3600  # 1 hour
+
+        lua_script = """
+        local key = KEYS[1]
+        local limit = tonumber(ARGV[1])
+        local ttl = tonumber(ARGV[2])
+        local val = redis.call('incr', key)
+        if val == 1 then
+            redis.call('expire', key, ttl)
+        end
+        if val > limit then
+            return 0
+        end
+        return 1
+        """
+        allowed = await redis_client.eval(lua_script, 1, key, limit, ttl)
+
+        if allowed == 0:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many registration attempts. Please try again in an hour.",
+                headers={"Retry-After": str(ttl)},
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        import structlog
+        log = structlog.get_logger()
+        log.warning("ratelimit.register_redis_error", error=str(e))
         return  # Fail open

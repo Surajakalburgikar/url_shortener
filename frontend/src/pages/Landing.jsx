@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import api from '../api/axios';
 import { parseExpiryDateTime } from '../utils/parseExpiry';
 
 const Landing = () => {
+  useEffect(() => {
+    document.title = "Brief.ly — Minimalist URL Shortener";
+  }, []);
   const [originalUrl, setOriginalUrl] = useState('');
   const [customAlias, setCustomAlias] = useState('');
   const [expiryDate, setExpiryDate] = useState('');

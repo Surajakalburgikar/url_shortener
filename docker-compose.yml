@@ -10,7 +10,7 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/urlshortener
       - REDIS_URL=redis://redis:6379/0
-      - ENVIRONMENT=production
+      - APP_ENV=production
       - SECRET_KEY=${SECRET_KEY}
       - ACCESS_TOKEN_EXPIRE_MINUTES=30
       - REFRESH_TOKEN_EXPIRE_DAYS=7

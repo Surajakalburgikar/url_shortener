@@ -35,8 +35,8 @@ from app.config import settings
 engine = create_async_engine(
     settings.database_url,
     echo=settings.is_development,  # Log SQL queries in dev, silent in production
-    pool_size=20,
-    max_overflow=10,
+    pool_size=5,
+    max_overflow=2,
     pool_timeout=30,
     pool_recycle=1800,
     connect_args={

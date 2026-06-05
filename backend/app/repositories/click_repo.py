@@ -127,13 +127,6 @@ class ClickRepository:
 
     # ── User-level aggregates (across ALL their links) ────────────────────────
 
-    async def get_user_link_ids(self, user_id: uuid.UUID) -> list[uuid.UUID]:
-        """Get all link IDs belonging to a user — used for cross-link analytics."""
-        result = await self.db.execute(
-            select(Link.id).where(Link.user_id == user_id)
-        )
-        return list(result.scalars().all())
-
     async def get_total_clicks_for_user(self, user_id: uuid.UUID) -> int:
         """Total clicks across ALL of a user's links."""
         result = await self.db.execute(

@@ -36,8 +36,7 @@ const OAuthCallback = () => {
         );
         clearTimeout(timeoutId);
         if (!active) return;
-        const { access_token, refresh_token } = response.data;
-        await loginWithOAuth(access_token, refresh_token);
+        await loginWithOAuth();
         navigate('/dashboard', { replace: true });
       } catch (err) {
         clearTimeout(timeoutId);

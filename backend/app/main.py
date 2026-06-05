@@ -18,7 +18,6 @@ The order middleware is added MATTERS — they execute in reverse order:
 """
 
 import logging
-import sys
 from contextlib import asynccontextmanager
 
 import structlog
@@ -86,6 +85,9 @@ async def lifespan(app: FastAPI):
     if redis_client:
         await redis_client.close()
         log.info("shutdown.redis_closed")
+    from app.routers.redirect import http_client as geo_http_client
+    await geo_http_client.aclose()
+    log.info("shutdown.geo_http_client_closed")
 
 
 app = FastAPI(
