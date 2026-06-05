@@ -23,6 +23,7 @@ graph TD
     User -->|HTTP GET Redirect| Redirect[FastAPI Redirect Router]
     Frontend -->|REST API| Backend[FastAPI Backend on Render]
     Backend -->|Async SQLAlchemy| PostgreSQL[(Supabase PostgreSQL)]
+
     Backend -->|Cache + Rate Limit| Redis[(Upstash Redis)]
     Redirect -->|Cache Hit| Redis
     Redirect -->|Cache Miss| PostgreSQL
